@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaIndustry, FaExclamationTriangle, FaCheckCircle, FaChartLine } from "react-icons/fa";
+import AdminReports from "../components/AdminReports";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -61,6 +62,10 @@ export default function AdminDashboard() {
             </div>
           );
         })}
+      </div>
+
+      <div style={{ marginTop: "40px", borderTop: "2px solid #cbd5e1", paddingTop: "40px" }}>
+        <AdminReports />
       </div>
     </div>
   );

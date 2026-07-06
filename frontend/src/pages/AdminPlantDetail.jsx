@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, memo } from "react";
+import React, { useEffect, useState, useRef, memo } from "react";
 import { useParams } from "react-router-dom";
 import ApexCharts from "apexcharts";
 
@@ -88,9 +88,27 @@ const ChartCard = memo(({ chart, index, inputs, updateChart }) => {
   const instance = useRef(null);
   const flat = flattenInputs(inputs);
 
+  const isPie = chart.type === "pie" || chart.type === "donut";
+
+  // Pre-calculate to ensure specific category subset contains real data
+  let finalSeriesData = [];
+  let pieDataset = null;
+
+  if (isPie) {
+      pieDataset = buildPieDataset(flat, chart.source);
+      finalSeriesData = pieDataset.values;
+  } else {
+      finalSeriesData = Object.values(flat);
+  }
+
+  const hasData = finalSeriesData.some(v => v > 0);
+
   useEffect(() => {
-    if (!ref.current) return;
-    if (instance.current) instance.current.destroy();
+    if (!ref.current || !hasData) return;
+    if (instance.current) {
+        try { instance.current.destroy(); } catch(e) {}
+        instance.current = null;
+    }
 
     const common = {
       chart: { type: chart.type, height: 320, toolbar: { show: false } },
@@ -99,9 +117,8 @@ const ChartCard = memo(({ chart, index, inputs, updateChart }) => {
     };
 
     let options;
-    if (chart.type === "pie" || chart.type === "donut") {
-      const pie = buildPieDataset(flat, chart.source);
-      options = { ...common, series: pie.values, labels: pie.labels, legend: { position: "bottom" } };
+    if (isPie) {
+      options = { ...common, series: pieDataset.values, labels: pieDataset.labels, legend: { position: "bottom" } };
     } else {
       options = {
         ...common,
@@ -110,13 +127,20 @@ const ChartCard = memo(({ chart, index, inputs, updateChart }) => {
       };
     }
 
-    instance.current = new ApexCharts(ref.current, options);
-    instance.current.render();
+    try {
+        instance.current = new ApexCharts(ref.current, options);
+        instance.current.render();
+    } catch(err) {
+        console.error("Chart Render Failed", err);
+    }
 
-    return () => instance.current?.destroy();
-  }, [chart.type, chart.source, JSON.stringify(flat)]);
-
-  const isPie = chart.type === "pie" || chart.type === "donut";
+    return () => {
+        if (instance.current) {
+            try { instance.current.destroy(); } catch(e) {}
+            instance.current = null;
+        }
+    };
+  }, [chart.type, chart.source, JSON.stringify(flat), hasData]);
 
   return (
     <div style={{
@@ -147,7 +171,14 @@ const ChartCard = memo(({ chart, index, inputs, updateChart }) => {
         )}
       </div>
 
-      <div ref={ref} style={{ height: 320 }} />
+      {!hasData ? (
+         <div style={{ height: 320, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", padding: 20 }}>
+            <h3 style={{ margin: 0, color: "#64748b", fontSize: 18 }}>Data not available for selected time period.</h3>
+            <p style={{ margin: "8px 0 0 0", color: "#94a3b8", fontSize: 14 }}>Try selecting a different year, month, or plant.</p>
+         </div>
+      ) : (
+         <div ref={ref} style={{ height: 320 }} />
+      )}
     </div>
   );
 });
@@ -207,7 +238,10 @@ const YearlyTrendChart = memo(({ plant, year }) => {
 
   useEffect(() => {
     if (loading || !ref.current) return;
-    if (instance.current) instance.current.destroy();
+    if (instance.current) {
+        try { instance.current.destroy(); } catch(e) {}
+        instance.current = null;
+    }
 
     const options = {
       chart: { type: 'area', height: 400, toolbar: { show: false } },
@@ -245,10 +279,19 @@ const YearlyTrendChart = memo(({ plant, year }) => {
       }
     };
 
-    instance.current = new ApexCharts(ref.current, options);
-    instance.current.render();
+    try {
+        instance.current = new ApexCharts(ref.current, options);
+        instance.current.render();
+    } catch(err) {
+        console.error("YearlyTrend failure", err);
+    }
 
-    return () => instance.current?.destroy();
+    return () => {
+        if (instance.current) {
+            try { instance.current.destroy(); } catch(e) {}
+            instance.current = null;
+        }
+    };
   }, [loading, chartData]);
 
   return (
@@ -268,6 +311,38 @@ const YearlyTrendChart = memo(({ plant, year }) => {
   );
 });
 
+/* ---------- ERROR BOUNDARY ---------- */
+class AdminPlantErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Admin Insights Crashed:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+         <div style={{ textAlign: "center", padding: "100px 20px" }}>
+            <h2 style={{color:"#dc2626"}}>Rendering Visualization Error</h2>
+            <p>An unexpected data anomaly occurred preventing graphs from loading.</p>
+            <button onClick={() => window.location.reload()} style={{
+                padding: "10px 20px", marginTop: 20, background: "#14b8a6", 
+                color: "#fff", border: "none", borderRadius: 8, cursor: "pointer"
+            }}>Reload Dashboard</button>
+         </div>
+      );
+    }
+    return this.props.children; 
+  }
+}
+
 /* ---------- DASHBOARD (Admin Detail) ---------- */
 export default function AdminPlantDetail() {
   const { plantId } = useParams();
@@ -284,11 +359,27 @@ export default function AdminPlantDetail() {
     { type: "pie", source: "Both" }
   ]);
 
+  const [dataLoading, setDataLoading] = useState(true);
+
   useEffect(() => {
+    let isMounted = true;
+    setDataLoading(true);
     fetch(`http://localhost:5000/api/carbon/dashboard/${plant}/${month + 1}/${year}`)
       .then(res => res.json())
-      .then(d => setData(d))
-      .catch(() => setData(null));
+      .then(d => {
+        if (isMounted) {
+            setData(d);
+            setDataLoading(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+            setData(null);
+            setDataLoading(false);
+        }
+      });
+      
+    return () => { isMounted = false; };
   }, [year, month, plant]);
 
   const safeData = data?.inputs && data?.kpis
@@ -316,7 +407,10 @@ export default function AdminPlantDetail() {
 
   const kpis = safeData.kpis;
 
+  const isValidDataset = data && data.inputs && data.kpis && Object.keys(data.inputs).length > 0;
+
   return (
+    <AdminPlantErrorBoundary>
     <div style={{ padding: "0 20px" }}>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 30 }}>
@@ -372,27 +466,50 @@ export default function AdminPlantDetail() {
         </div>
       </div>
 
-      <div style={{
-        display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 24, marginBottom: 40
-      }}>
-        <KpiCard index={0} title="Total RE %" value={kpis.renewablePercent} />
-        <KpiCard index={1} title="Total Green Fuel %" value={kpis.greenFuelPercent} />
-        <KpiCard index={2} title="Energy Usage Ratio" value={kpis.energyRatio} />
-        <KpiCard index={3} title="Carbon Footprint (MT)" value={kpis.totalCarbonMT} />
-        <KpiCard index={4} title="Carbon Intensity" value={kpis.carbonIntensity} />
-        <KpiCard index={5} title="Total Energy (MJ)" value={kpis.totalEnergyMJ} />
-      </div>
+      {!isValidDataset && !dataLoading ? (
+        <div style={{ 
+          height: 400, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", 
+          textAlign: "center", background: "#f8fafc", borderRadius: 16, border: "2px dashed #cbd5e1", marginTop: 40 
+        }}>
+           <h2 style={{ margin: "0 0 10px 0", color: "#475569", fontSize: 24 }}>Data is not available for the selected time period.</h2>
+           <p style={{ margin: 0, color: "#94a3b8", fontSize: 16 }}>Try selecting a different year, month, or plant.</p>
+        </div>
+      ) : (
+        <>
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 24, marginBottom: 40, opacity: dataLoading ? 0.6 : 1, transition: "0.3s"
+          }}>
+            {dataLoading ? (
+                <div style={{ gridColumn: "span 3", textAlign: "center", padding: "40px", color: "#64748b" }}>
+                    <h3>Loading Metrics...</h3>
+                </div>
+            ) : (
+                <>
+                    <KpiCard index={0} title="Total RE %" value={kpis.renewablePercent} />
+                    <KpiCard index={1} title="Total Green Fuel %" value={kpis.greenFuelPercent} />
+                    <KpiCard index={2} title="Energy Usage Ratio" value={kpis.energyRatio} />
+                    <KpiCard index={3} title="Carbon Footprint (MT)" value={kpis.totalCarbonMT} />
+                    <KpiCard index={4} title="Carbon Intensity" value={kpis.carbonIntensity} />
+                    <KpiCard index={5} title="Total Energy (MJ)" value={kpis.totalEnergyMJ} />
+                </>
+            )}
+          </div>
 
-      <div style={{
-        display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30, marginBottom: "20px"
-      }}>
-        {charts.map((chart, i) => (
-          <ChartCard key={i} chart={chart} index={i} inputs={safeData.inputs} updateChart={updateChart} />
-        ))}
-      </div>
+          <div style={{
+            display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30, marginBottom: "20px", opacity: dataLoading ? 0.6 : 1
+          }}>
+            {charts.map((chart, i) => (
+              <ChartCard key={i} chart={chart} index={i} inputs={safeData.inputs} updateChart={updateChart} />
+            ))}
+          </div>
 
-      <YearlyTrendChart plant={plant} year={year} />
+          <div style={{ opacity: dataLoading ? 0.6 : 1 }}>
+             <YearlyTrendChart plant={plant} year={year} />
+          </div>
+        </>
+      )}
 
     </div>
+    </AdminPlantErrorBoundary>
   );
 }

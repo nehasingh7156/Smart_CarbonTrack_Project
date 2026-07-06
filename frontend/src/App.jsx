@@ -2,6 +2,7 @@ import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import Landing from "./pages/Landing";
+import GetStarted from "./pages/GetStarted";
 import Home from "./pages/Home";
 import InputForm from "./pages/InputForm";
 import Dashboard from "./pages/Dashboard";
@@ -22,8 +23,9 @@ function App() {
     <BrowserRouter>
       <Routes>
 
-        {/* Landing */}
-        <Route path="/" element={<Landing />} />
+        {/* Landing & Get Started */}
+        <Route path="/" element={<GetStarted />} />
+        <Route path="/login" element={<Landing />} />
 
         {/* Plant Manager Layout protected */}
         <Route element={<ProtectedRoute allowedRoles={["manager"]} />}>

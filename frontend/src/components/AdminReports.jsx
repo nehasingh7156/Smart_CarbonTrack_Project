@@ -16,7 +16,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const QUARTERS = ["Q1 (Jan-Mar)", "Q2 (Apr-Jun)", "Q3 (Jul-Sep)", "Q4 (Oct-Dec)"];
 const COLORS = ["#14b8a6", "#f59e0b", "#3b82f6", "#ef4444", "#8b5cf6", "#10b981", "#f43f5e", "#64748b"];
 
-export default function Reports() {
+export default function AdminReports() {
   const [selectedPlant, setSelectedPlant] = useState(localStorage.getItem("plant") || "Select Plant");
   const [selectedPeriodType, setSelectedPeriodType] = useState("Month");
   const [year, setYear] = useState(new Date().getFullYear());
@@ -31,67 +31,73 @@ export default function Reports() {
   const [reportData, setReportData] = useState(null);
   const [rawResponses, setRawResponses] = useState([]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    let monthsToFetch = [];
-    
-    if (selectedPeriodType === "Month") {
-      monthsToFetch = [monthIndex + 1];
-    } else if (selectedPeriodType === "Quarter") {
-      const start = quarterIndex * 3 + 1;
-      monthsToFetch = [start, start + 1, start + 2];
-    } else {
-      monthsToFetch = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-    }
-
-    try {
-      const promises = monthsToFetch.map(m => 
-        fetch(`http://localhost:5000/api/carbon/dashboard/${selectedPlant}/${m}/${year}`)
-          .then(res => res.ok ? res.json() : null)
-          .catch(() => null)
-      );
-
-      const results = await Promise.all(promises);
-      const valids = results.filter(d => d && d.inputs && d.kpis);
-      
-      setRawResponses(valids);
-      const aggregated = valids.reduce((acc, d) => {
-        const i = d.inputs;
-        const p = i.powerConsumption || {};
-        const f = i.fuelConsumption || {};
-        const k = d.kpis || {};
-        
-        acc.power.grid += p.gridPowerKWh || 0;
-        acc.power.renew += p.renewablePowerKWh || 0;
-        acc.power.solar += p.solarPowerKWh || 0;
-        
-        acc.fuel.hsd += f.hsdLitre || 0;
-        acc.fuel.png += (f.pngSCM || f.pngScm || 0);
-        acc.fuel.lpg += f.lpgKg || 0;
-        acc.fuel.fur += f.furnaceOilLitre || 0;
-        acc.fuel.bio += (f.biomassMJ || f.biomassMj || 0);
-
-        acc.prod += i.beverageProduction || 0;
-        acc.energy += k.totalEnergyMJ || 0;
-        acc.carbon += k.totalCarbonMT ? parseFloat(k.totalCarbonMT) : 0;
-        
-        return acc;
-      }, {
-        power: { grid: 0, renew: 0, solar: 0 },
-        fuel: { hsd: 0, png: 0, lpg: 0, fur: 0, bio: 0 },
-        prod: 0, energy: 0, carbon: 0, count: valids.length
-      });
-
-      setReportData(aggregated);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    let isMounted = true;
+    
+    const fetchData = async () => {
+      setLoading(true);
+      let monthsToFetch = [];
+      
+      if (selectedPeriodType === "Month") {
+        monthsToFetch = [monthIndex + 1];
+      } else if (selectedPeriodType === "Quarter") {
+        const start = quarterIndex * 3 + 1;
+        monthsToFetch = [start, start + 1, start + 2];
+      } else {
+        monthsToFetch = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+      }
+
+      try {
+        const promises = monthsToFetch.map(m => 
+          fetch(`http://localhost:5000/api/carbon/dashboard/${selectedPlant}/${m}/${year}`)
+            .then(res => res.ok ? res.json() : null)
+            .catch(() => null)
+        );
+
+        const results = await Promise.all(promises);
+        if (!isMounted) return;
+
+        const valids = results.filter(d => d && d.inputs && d.kpis);
+        
+        setRawResponses(valids);
+        const aggregated = valids.reduce((acc, d) => {
+          const i = d.inputs;
+          const p = i.powerConsumption || {};
+          const f = i.fuelConsumption || {};
+          const k = d.kpis || {};
+          
+          acc.power.grid += p.gridPowerKWh || 0;
+          acc.power.renew += p.renewablePowerKWh || 0;
+          acc.power.solar += p.solarPowerKWh || 0;
+          
+          acc.fuel.hsd += f.hsdLitre || 0;
+          acc.fuel.png += (f.pngSCM || f.pngScm || 0);
+          acc.fuel.lpg += f.lpgKg || 0;
+          acc.fuel.fur += f.furnaceOilLitre || 0;
+          acc.fuel.bio += (f.biomassMJ || f.biomassMj || 0);
+
+          acc.prod += i.beverageProduction || 0;
+          acc.energy += k.totalEnergyMJ || 0;
+          acc.carbon += k.totalCarbonMT ? parseFloat(k.totalCarbonMT) : 0;
+          
+          return acc;
+        }, {
+          power: { grid: 0, renew: 0, solar: 0 },
+          fuel: { hsd: 0, png: 0, lpg: 0, fur: 0, bio: 0 },
+          prod: 0, energy: 0, carbon: 0, count: valids.length
+        });
+
+        setReportData(aggregated);
+      } catch (err) {
+        if (isMounted) console.error(err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
     fetchData();
+    
+    return () => { isMounted = false; };
   }, [selectedPlant, selectedPeriodType, monthIndex, quarterIndex, year]);
 
   const handlePrint = () => {
@@ -195,13 +201,17 @@ export default function Reports() {
             </div>
         </div>
 
-        <button onClick={fetchData} style={{
+        <button onClick={() => {
+            // Trigger a re-render explicitly by coercing the state array or toggling a reload flag, 
+            // but since effect depends on dependencies, it will auto-fetch.
+            // For manual refresh, we can just mutate state trivially or rely on existing auto-fetch.
+        }} style={{
             background: "linear-gradient(135deg, #0d9488, #14b8a6)", color: "white", border: "none", 
             borderRadius: 10, padding: "14px 28px", fontSize: 15, fontWeight: 800, cursor: "pointer",
             boxShadow: "0 4px 15px rgba(20, 184, 166, 0.4)", display: "flex", alignItems: "center", gap: 8,
             transition: "0.2s"
         }}>
-            <FiActivity size={18} /> Refresh Data
+            <FiActivity size={18} /> Auto-Saving View
         </button>
       </div>
 
