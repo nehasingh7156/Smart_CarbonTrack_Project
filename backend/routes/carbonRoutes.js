@@ -13,4 +13,12 @@ router.get(
   carbonController.getDashboard
 );
 
+// Fetch all historical plant data
+router.get(
+  '/plant-data/:userId',
+  carbonController.getData
+);
+
+router.get('/plants', carbonController.getAllPlants);
+
 module.exports = router;

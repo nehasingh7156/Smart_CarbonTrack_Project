@@ -1,51 +1,88 @@
 import React, { useEffect, useState, useRef, memo } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
+import { 
+  FiArrowLeft, FiCalendar, FiChevronLeft, FiChevronRight,
+  FiZap, FiSun, FiActivity, FiTarget, FiLoader, FiShield, FiSliders
+} from "react-icons/fi";
+import { FaLeaf, FaChartLine } from "react-icons/fa";
 import ApexCharts from "apexcharts";
 
 /* ---------- chart types ---------- */
 const chartTypes = ["bar", "line", "area", "pie", "donut"];
-const chartCardGradient = "linear-gradient(135deg,#f8fafc,#eef2f7)";
+const chartCardGradient = "#ffffff";
 const dropdownStyle = {
-  padding: 10,
+  padding: "8px 12px",
   borderRadius: 8,
-  border: "1px solid #d1d5db",
-  background: "#f3f4f6",
-  color: "#000",
-  fontSize: 14,
-  minWidth: 150
+  border: "1px solid #cbd5e1",
+  background: "#f8fafc",
+  color: "#0f172a",
+  fontSize: 13,
+  fontWeight: 600,
+  minWidth: 120,
+  outline: "none",
+  cursor: "pointer"
 };
 
 /* ---------- KPI CARD ---------- */
-const gradients = [
-  "linear-gradient(135deg,#ccfbf1,#99f6e4)",
-  "linear-gradient(135deg,#ccfbf1,#99f6e4)",
-  "linear-gradient(135deg,#ccfbf1,#99f6e4)",
-  "linear-gradient(135deg,#e0f2fe,#bae6fd)",
-  "linear-gradient(135deg,#e0f2fe,#bae6fd)",
-  "linear-gradient(135deg,#e0f2fe,#bae6fd)"
+const kpiConfigs = [
+  { title: "Renewable Mix", icon: <FiSun />, color: "#10b981", bg: "rgba(16,185,129,0.06)", suffix: "%" },
+  { title: "Green Fuel Mix", icon: <FaLeaf />, color: "#0f766e", bg: "rgba(15,118,110,0.06)", suffix: "%" },
+  { title: "Energy Usage Ratio", icon: <FiZap />, color: "#3b82f6", bg: "rgba(59,130,246,0.06)", suffix: " MJ/L" },
+  { title: "Carbon Footprint", icon: <FiActivity />, color: "#ef4444", bg: "rgba(239,68,68,0.06)", suffix: " MT" },
+  { title: "Carbon Intensity", icon: <FiTarget />, color: "#f59e0b", bg: "rgba(245,158,11,0.06)", suffix: " kg/L" },
+  { title: "Total Energy", icon: <FiShield />, color: "#8b5cf6", bg: "rgba(139,92,246,0.06)", suffix: " MJ" }
 ];
 
-const KpiCard = ({ title, value, index }) => (
-  <div style={{
-    background: gradients[index],
-    padding: 26,
-    borderRadius: 16,
-    textAlign: "center",
-    boxShadow: "0 10px 20px rgba(0,0,0,0.12)"
-  }}>
-    <h4 style={{
-      fontSize: 24,
-      color: "#065f46",
-      marginBottom: 10,
-      fontWeight: 700
-    }}>{title}</h4>
-    <p style={{
-      fontSize: 36,
-      fontWeight: 900,
-      color: "#064e3b"
-    }}>{value ?? 0}</p>
-  </div>
-);
+const KpiCard = ({ value, index }) => {
+  const cfg = kpiConfigs[index] || kpiConfigs[0];
+  const displayVal = typeof value === "number" ? value.toFixed(value < 1 && value > 0 ? 3 : 1) : value;
+
+  return (
+    <div style={{
+      background: "white",
+      padding: "24px",
+      borderRadius: "20px",
+      border: "1px solid rgba(226, 232, 240, 0.8)",
+      boxShadow: "0 4px 20px rgba(15, 23, 42, 0.02)",
+      display: "flex",
+      alignItems: "center",
+      gap: "18px"
+    }}>
+      <div style={{
+        width: 44,
+        height: 44,
+        borderRadius: "12px",
+        background: cfg.bg,
+        color: cfg.color,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "20px",
+        flexShrink: 0
+      }}>
+        {cfg.icon}
+      </div>
+      <div>
+        <h4 style={{
+          fontSize: "11px",
+          color: "#64748b",
+          marginBottom: "4px",
+          fontWeight: "800",
+          textTransform: "uppercase",
+          letterSpacing: "0.5px"
+        }}>{cfg.title}</h4>
+        <p style={{
+          fontSize: "20px",
+          fontWeight: "900",
+          color: "#0f172a",
+          margin: 0
+        }}>
+          {displayVal}{cfg.suffix}
+        </p>
+      </div>
+    </div>
+  );
+};
 
 /* ---------- DATA HELPERS ---------- */
 const flattenInputs = inputs => ({
@@ -77,7 +114,7 @@ const buildPieDataset = (flat, source) => {
   };
 };
 
-const buildAdvancedSeries = (flat, type) => {
+const buildAdvancedSeries = (flat) => {
   const values = Object.values(flat);
   return [{ name: "Data", data: values }];
 };
@@ -106,14 +143,20 @@ const ChartCard = memo(({ chart, index, inputs, updateChart }) => {
   useEffect(() => {
     if (!ref.current || !hasData) return;
     if (instance.current) {
-        try { instance.current.destroy(); } catch(e) {}
+        try { instance.current.destroy(); } catch(e) { void e; }
         instance.current = null;
     }
 
     const common = {
-      chart: { type: chart.type, height: 320, toolbar: { show: false } },
-      tooltip: { enabled: true, shared: false, intersect: true },
-      dataLabels: { enabled: true }
+      chart: { 
+        type: chart.type, 
+        height: 320, 
+        toolbar: { show: false },
+        fontFamily: "'Inter', sans-serif"
+      },
+      tooltip: { enabled: true, theme: "light" },
+      dataLabels: { enabled: true },
+      colors: ["#0f766e", "#10b981", "#3b82f6", "#ef4444", "#f59e0b", "#8b5cf6", "#ec4899", "#64748b", "#334155"]
     };
 
     let options;
@@ -122,8 +165,9 @@ const ChartCard = memo(({ chart, index, inputs, updateChart }) => {
     } else {
       options = {
         ...common,
-        series: buildAdvancedSeries(flat, chart.type),
-        xaxis: { categories: Object.keys(flat) }
+        series: buildAdvancedSeries(flat),
+        xaxis: { categories: Object.keys(flat) },
+        grid: { borderColor: "rgba(226, 232, 240, 0.6)", strokeDasharray: 4 }
       };
     }
 
@@ -136,20 +180,22 @@ const ChartCard = memo(({ chart, index, inputs, updateChart }) => {
 
     return () => {
         if (instance.current) {
-            try { instance.current.destroy(); } catch(e) {}
+            try { instance.current.destroy(); } catch(e) { void e; }
             instance.current = null;
         }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chart.type, chart.source, JSON.stringify(flat), hasData]);
 
   return (
     <div style={{
       background: chartCardGradient,
-      padding: 20,
-      borderRadius: 14,
-      boxShadow: "0 6px 14px rgba(0,0,0,0.08)"
+      padding: 24,
+      borderRadius: 20,
+      border: "1px solid rgba(226, 232, 240, 0.8)",
+      boxShadow: "0 4px 20px rgba(15, 23, 42, 0.02)"
     }}>
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 16, display: "flex", gap: 10, justifyContent: "flex-end" }}>
         <select
           style={dropdownStyle}
           value={chart.type}
@@ -160,7 +206,7 @@ const ChartCard = memo(({ chart, index, inputs, updateChart }) => {
 
         {isPie && (
           <select
-            style={{ ...dropdownStyle, marginTop: 8 }}
+            style={dropdownStyle}
             value={chart.source}
             onChange={e => updateChart(index, "source", e.target.value)}
           >
@@ -173,8 +219,8 @@ const ChartCard = memo(({ chart, index, inputs, updateChart }) => {
 
       {!hasData ? (
          <div style={{ height: 320, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", padding: 20 }}>
-            <h3 style={{ margin: 0, color: "#64748b", fontSize: 18 }}>Data not available for selected time period.</h3>
-            <p style={{ margin: "8px 0 0 0", color: "#94a3b8", fontSize: 14 }}>Try selecting a different year, month, or plant.</p>
+            <h3 style={{ margin: 0, color: "#64748b", fontSize: 16 }}>Data not available for selected time period.</h3>
+            <p style={{ margin: "8px 0 0 0", color: "#94a3b8", fontSize: 13 }}>Try selecting a different year, month, or plant.</p>
          </div>
       ) : (
          <div ref={ref} style={{ height: 320 }} />
@@ -239,13 +285,18 @@ const YearlyTrendChart = memo(({ plant, year }) => {
   useEffect(() => {
     if (loading || !ref.current) return;
     if (instance.current) {
-        try { instance.current.destroy(); } catch(e) {}
+        try { instance.current.destroy(); } catch(e) { void e; }
         instance.current = null;
     }
 
     const options = {
-      chart: { type: 'area', height: 400, toolbar: { show: false } },
-      colors: ['#0f768e'],
+      chart: { 
+        type: 'area', 
+        height: 400, 
+        toolbar: { show: false },
+        fontFamily: "'Inter', sans-serif"
+      },
+      colors: ['#0f766e'],
       series: [{
         name: 'Carbon Intensity',
         data: chartData.intensity
@@ -257,25 +308,27 @@ const YearlyTrendChart = memo(({ plant, year }) => {
         yaxis: [
           {
             y: chartData.baseline,
-            borderColor: '#FF4560',
+            borderColor: '#ef4444',
             strokeDashArray: 4,
             borderWidth: 2,
             label: {
-              borderColor: '#FF4560',
+              borderColor: '#ef4444',
               style: {
                 color: '#fff',
-                background: '#FF4560'
+                background: '#ef4444',
+                fontWeight: 700
               },
-              text: `Baseline (Avg 3 Months): ${chartData.baseline.toFixed(2)}`
+              text: `Baseline (Avg 3 Months): ${chartData.baseline.toFixed(3)}`
             }
           }
         ]
       },
+      grid: { borderColor: "rgba(226, 232, 240, 0.6)", strokeDasharray: 4 },
       dataLabels: { enabled: false },
       stroke: { curve: 'smooth', width: 3 },
       fill: {
         type: 'gradient',
-        gradient: { shadeIntensity: 1, opacityFrom: 0.7, opacityTo: 0.2, stops: [0, 90, 100] }
+        gradient: { shadeIntensity: 1, opacityFrom: 0.5, opacityTo: 0.1, stops: [0, 90, 100] }
       }
     };
 
@@ -288,7 +341,7 @@ const YearlyTrendChart = memo(({ plant, year }) => {
 
     return () => {
         if (instance.current) {
-            try { instance.current.destroy(); } catch(e) {}
+            try { instance.current.destroy(); } catch(e) { void e; }
             instance.current = null;
         }
     };
@@ -296,13 +349,15 @@ const YearlyTrendChart = memo(({ plant, year }) => {
 
   return (
     <div style={{
-      background: "white", padding: 24, borderRadius: 16,
-      boxShadow: "0 10px 30px rgba(0,0,0,0.1)", marginTop: 20
+      background: "white", padding: 26, borderRadius: 20,
+      border: "1px solid rgba(226, 232, 240, 0.8)",
+      boxShadow: "0 4px 20px rgba(15, 23, 42, 0.02)", marginTop: 24
     }}>
-      <h3 style={{ margin: "0 0 20px 0", color: "#1e293b", fontSize: 24 }}>Monthly Carbon Intensity Trend</h3>
+      <h3 style={{ margin: "0 0 20px 0", color: "#0f172a", fontSize: 17, fontWeight: 800 }}>Monthly Carbon Intensity Trend</h3>
       {loading ? (
-        <div style={{ height: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <p style={{ fontSize: 18, color: "#64748b" }}>Loading yearly trend...</p>
+        <div style={{ height: 400, display: "flex", alignItems: "center", justifyContent: "center", color: "#0f766e" }}>
+          <FiLoader size={36} style={{ animation: "spin 1s linear infinite" }} />
+          <style dangerouslySetInnerHTML={{ __html: "@keyframes spin { 100% { transform: rotate(360deg); } }" }} />
         </div>
       ) : (
         <div ref={ref} style={{ height: 400 }} />
@@ -318,7 +373,7 @@ class AdminPlantErrorBoundary extends React.Component {
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError() {
     return { hasError: true };
   }
 
@@ -330,10 +385,10 @@ class AdminPlantErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
          <div style={{ textAlign: "center", padding: "100px 20px" }}>
-            <h2 style={{color:"#dc2626"}}>Rendering Visualization Error</h2>
+            <h2 style={{color:"#ef4444"}}>Rendering Visualization Error</h2>
             <p>An unexpected data anomaly occurred preventing graphs from loading.</p>
             <button onClick={() => window.location.reload()} style={{
-                padding: "10px 20px", marginTop: 20, background: "#14b8a6", 
+                padding: "10px 20px", marginTop: 20, background: "#0f766e", 
                 color: "#fff", border: "none", borderRadius: 8, cursor: "pointer"
             }}>Reload Dashboard</button>
          </div>
@@ -347,6 +402,7 @@ class AdminPlantErrorBoundary extends React.Component {
 export default function AdminPlantDetail() {
   const { plantId } = useParams();
   const plant = plantId;
+  const navigate = useNavigate();
 
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -363,7 +419,10 @@ export default function AdminPlantDetail() {
 
   useEffect(() => {
     let isMounted = true;
-    setDataLoading(true);
+    setTimeout(() => {
+      setDataLoading(true);
+    }, 0);
+    
     fetch(`http://localhost:5000/api/carbon/dashboard/${plant}/${month + 1}/${year}`)
       .then(res => res.json())
       .then(d => {
@@ -401,8 +460,9 @@ export default function AdminPlantDetail() {
   };
 
   const arrowStyle = {
-    background: "#14b8a6", color: "#fff", border: "none", borderRadius: 8,
-    width: 36, height: 36, cursor: "pointer", fontSize: 16
+    background: "#0f766e", color: "#fff", border: "none", borderRadius: 8,
+    width: 32, height: 32, cursor: "pointer", fontSize: 14, display: "flex",
+    alignItems: "center", justifyContent: "center"
   };
 
   const kpis = safeData.kpis;
@@ -411,15 +471,40 @@ export default function AdminPlantDetail() {
 
   return (
     <AdminPlantErrorBoundary>
-    <div style={{ padding: "0 20px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 30 }}>
+      {/* HEADER ROW WITH BACK BUTTON */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 42, fontWeight: 900, color: "#0f768e", margin: 0 }}>
+          <button 
+            onClick={() => navigate("/admin/dashboard")} 
+            style={{
+              background: "white",
+              color: "#0f766e",
+              border: "1px solid rgba(226, 232, 240, 0.8)",
+              padding: "8px 16px",
+              borderRadius: "10px",
+              cursor: "pointer",
+              fontWeight: 700,
+              fontSize: "13px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+              marginBottom: 14,
+              transition: "0.2s"
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"}
+            onMouseLeave={e => e.currentTarget.style.background = "white"}
+          >
+            <FiArrowLeft /> Back to Overview
+          </button>
+          
+          <h1 style={{ fontSize: 28, fontWeight: 900, color: "#0f172a", margin: 0, letterSpacing: "-0.5px" }}>
             {plant} Insights
           </h1>
-          <p style={{ margin: "8px 0 0 0", color: "#134e4a", fontSize: 18 }}>
-            Comprehensive analysis and KPIs for {plant}.
+          <p style={{ margin: "4px 0 0 0", color: "#475569", fontSize: 14, fontWeight: 500 }}>
+            Comprehensive analysis, carbon cap audits, and energy ratios for {plant} Node.
           </p>
         </div>
 
@@ -427,34 +512,35 @@ export default function AdminPlantDetail() {
           <button
             onClick={() => setShowCal(v => !v)}
             style={{
-              fontSize: 20, padding: "12px 20px", borderRadius: 12, border: "none",
-              background: "#14b8a6", color: "#fff", cursor: "pointer", fontWeight: "bold",
-              boxShadow: "0 4px 12px rgba(20,184,166,0.3)"
+              fontSize: 14, padding: "10px 18px", borderRadius: 10, border: "none",
+              background: "#0f766e", color: "#fff", cursor: "pointer", fontWeight: "bold",
+              boxShadow: "0 4px 12px rgba(15,118,110,0.2)", display: "flex", alignItems: "center", gap: 8
             }}
           >
-            📅 Select Month
+            <FiCalendar /> Select Month
           </button>
 
           {showCal && (
             <div style={{
-              position: "absolute", top: 60, right: 0, background: "#fff",
-              borderRadius: 12, padding: 16, boxShadow: "0 10px 25px rgba(0,0,0,0.15)", zIndex: 10
+              position: "absolute", top: 48, right: 0, background: "#fff",
+              borderRadius: 16, padding: 18, boxShadow: "0 10px 30px rgba(15,23,42,0.1)", zIndex: 10,
+              border: "1px solid #e2e8f0", minWidth: 260
             }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                <button onClick={() => setYear(y => y - 1)} style={arrowStyle}>{"<"}</button>
-                <b style={{ color: "#14b8a6", fontSize: 18, alignSelf: "center" }}>{year}</b>
-                <button onClick={() => setYear(y => y + 1)} style={arrowStyle}>{">"}</button>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                <button onClick={() => setYear(y => y - 1)} style={arrowStyle}><FiChevronLeft/></button>
+                <b style={{ color: "#0f766e", fontSize: 16, alignSelf: "center", fontWeight: 800 }}>{year}</b>
+                <button onClick={() => setYear(y => y + 1)} style={arrowStyle}><FiChevronRight/></button>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
                 {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, i) => (
                   <button
                     key={m}
                     onClick={() => { setMonth(i); setShowCal(false); }}
                     style={{
-                      padding: 10, borderRadius: 8, border: "1px solid #14b8a6",
-                      background: i === month ? "#14b8a6" : "#fff",
-                      color: i === month ? "#fff" : "#14b8a6",
-                      cursor: "pointer", fontWeight: "bold"
+                      padding: "8px 0", borderRadius: 8, border: "1px solid #cbd5e1",
+                      background: i === month ? "#0f766e" : "#fff",
+                      color: i === month ? "#fff" : "#475569",
+                      cursor: "pointer", fontWeight: "bold", fontSize: 12
                     }}
                   >
                     {m}
@@ -468,41 +554,45 @@ export default function AdminPlantDetail() {
 
       {!isValidDataset && !dataLoading ? (
         <div style={{ 
-          height: 400, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", 
-          textAlign: "center", background: "#f8fafc", borderRadius: 16, border: "2px dashed #cbd5e1", marginTop: 40 
+          height: 350, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", 
+          textAlign: "center", background: "white", borderRadius: 20, border: "1px dashed #cbd5e1", marginTop: 12, padding: 20
         }}>
-           <h2 style={{ margin: "0 0 10px 0", color: "#475569", fontSize: 24 }}>Data is not available for the selected time period.</h2>
-           <p style={{ margin: 0, color: "#94a3b8", fontSize: 16 }}>Try selecting a different year, month, or plant.</p>
+           <h2 style={{ margin: "0 0 8px 0", color: "#0f172a", fontSize: 18, fontWeight: 800 }}>Data not available for the selected period.</h2>
+           <p style={{ margin: 0, color: "#64748b", fontSize: 13, fontWeight: 500 }}>Try selecting a different year, month, or plant.</p>
         </div>
       ) : (
         <>
+          {/* KPI CARDS GRID */}
           <div style={{
-            display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 24, marginBottom: 40, opacity: dataLoading ? 0.6 : 1, transition: "0.3s"
+            display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, opacity: dataLoading ? 0.6 : 1, transition: "0.3s"
           }}>
             {dataLoading ? (
-                <div style={{ gridColumn: "span 3", textAlign: "center", padding: "40px", color: "#64748b" }}>
-                    <h3>Loading Metrics...</h3>
+                <div style={{ gridColumn: "span 3", textAlign: "center", padding: "40px", color: "#0f766e" }}>
+                    <FiLoader size={36} style={{ animation: "spin 1s linear infinite" }} />
+                    <p style={{ fontWeight: 600, fontSize: 14, marginTop: 8 }}>Loading Metrics...</p>
                 </div>
             ) : (
                 <>
-                    <KpiCard index={0} title="Total RE %" value={kpis.renewablePercent} />
-                    <KpiCard index={1} title="Total Green Fuel %" value={kpis.greenFuelPercent} />
+                    <KpiCard index={0} title="Total RE Mix" value={kpis.renewablePercent} />
+                    <KpiCard index={1} title="Green Fuel Mix" value={kpis.greenFuelPercent} />
                     <KpiCard index={2} title="Energy Usage Ratio" value={kpis.energyRatio} />
-                    <KpiCard index={3} title="Carbon Footprint (MT)" value={kpis.totalCarbonMT} />
+                    <KpiCard index={3} title="Carbon Footprint" value={kpis.totalCarbonMT} />
                     <KpiCard index={4} title="Carbon Intensity" value={kpis.carbonIntensity} />
-                    <KpiCard index={5} title="Total Energy (MJ)" value={kpis.totalEnergyMJ} />
+                    <KpiCard index={5} title="Total Energy" value={kpis.totalEnergyMJ} />
                 </>
             )}
           </div>
 
+          {/* CHARTS GRID */}
           <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30, marginBottom: "20px", opacity: dataLoading ? 0.6 : 1
+            display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, opacity: dataLoading ? 0.6 : 1
           }}>
             {charts.map((chart, i) => (
               <ChartCard key={i} chart={chart} index={i} inputs={safeData.inputs} updateChart={updateChart} />
             ))}
           </div>
 
+          {/* YEARLY CHART PANEL */}
           <div style={{ opacity: dataLoading ? 0.6 : 1 }}>
              <YearlyTrendChart plant={plant} year={year} />
           </div>

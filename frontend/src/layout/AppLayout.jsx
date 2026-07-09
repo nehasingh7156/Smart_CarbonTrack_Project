@@ -12,13 +12,14 @@ export default function AppLayout() {
     location.pathname.split("/").pop() || "home";
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden", fontFamily: "'Inter', sans-serif" }}>
+    <div className="app-layout-container" style={{ display: "flex", height: "100vh", overflow: "hidden", fontFamily: "'Inter', sans-serif" }}>
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div className="app-content-column" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <Topbar plant={plant} page={pageName} collapsed={collapsed} setCollapsed={setCollapsed} />
 
         <main
+          className="app-main-content"
           style={{
             flex: 1,
             padding: "36px 40px",

@@ -1,8 +1,9 @@
 import { useNavigate } from "react-router-dom";
 import { FiMenu, FiLogOut } from "react-icons/fi";
 
-export default function Topbar({ plant, page, collapsed, setCollapsed }) {
+export default function Topbar({ plant, page, setCollapsed }) {
   const navigate = useNavigate();
+  const userRole = localStorage.getItem("userRole") || "manager";
 
   const handleLogout = () => {
     localStorage.removeItem("userRole");
@@ -10,8 +11,58 @@ export default function Topbar({ plant, page, collapsed, setCollapsed }) {
     navigate("/");
   };
 
+  if (userRole === "admin") {
+    return (
+      <div
+        className="no-print"
+        style={{
+          background: "#c7e9ff",
+          color: "Teal",
+          padding: "14px 24px",
+          borderBottom: "1px solid #ddd",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          fontFamily: "'Inter', sans-serif"
+        }}
+      >
+        <div>
+          <h2 style={{ margin: 0, fontWeight: 700, fontSize: "20px" }}>{plant}</h2>
+          <p
+            style={{
+              margin: 0,
+              opacity: 0.7,
+              textTransform: "capitalize",
+              fontSize: "14px",
+              fontWeight: 600
+            }}
+          >
+            {page}
+          </p>
+        </div>
+
+        <button
+          onClick={handleLogout}
+          style={{
+            background: "#0f766e",
+            color: "white",
+            border: "none",
+            padding: "8px 16px",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontWeight: "bold",
+            fontSize: "14px"
+          }}
+        >
+          Logout
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
+      className="no-print"
       style={{
         background: "rgba(255, 255, 255, 0.8)",
         backdropFilter: "blur(16px)",
@@ -27,33 +78,35 @@ export default function Topbar({ plant, page, collapsed, setCollapsed }) {
     >
       <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
         {/* Toggle Collapse Button */}
-        <button
-          onClick={() => setCollapsed(prev => !prev)}
-          style={{
-            background: "rgba(15, 118, 110, 0.06)",
-            border: "1px solid rgba(15, 118, 110, 0.1)",
-            color: "#0f766e",
-            width: "38px",
-            height: "38px",
-            borderRadius: "10px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            fontSize: "18px",
-            transition: "all 0.2s ease"
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(15, 118, 110, 0.12)";
-            e.currentTarget.style.transform = "scale(1.05)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "rgba(15, 118, 110, 0.06)";
-            e.currentTarget.style.transform = "scale(1)";
-          }}
-        >
-          <FiMenu />
-        </button>
+        {setCollapsed && (
+          <button
+            onClick={() => setCollapsed(prev => !prev)}
+            style={{
+              background: "rgba(15, 118, 110, 0.06)",
+              border: "1px solid rgba(15, 118, 110, 0.1)",
+              color: "#0f766e",
+              width: "38px",
+              height: "38px",
+              borderRadius: "10px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              fontSize: "18px",
+              transition: "all 0.2s ease"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(15, 118, 110, 0.12)";
+              e.currentTarget.style.transform = "scale(1.05)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(15, 118, 110, 0.06)";
+              e.currentTarget.style.transform = "scale(1)";
+            }}
+          >
+            <FiMenu />
+          </button>
+        )}
 
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>

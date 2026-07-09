@@ -7,6 +7,7 @@ import Home from "./pages/Home";
 import InputForm from "./pages/InputForm";
 import Dashboard from "./pages/Dashboard";
 import Analytics from "./pages/Analytics";
+import Forecasting from "./pages/Forecasting";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 
@@ -47,6 +48,7 @@ function App() {
             />
 
             <Route path="analytics" element={<Analytics />} />
+            <Route path="forecasting" element={<Forecasting />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<Settings />} />
 

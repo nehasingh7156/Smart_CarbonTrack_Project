@@ -14,6 +14,7 @@ const links = [
   { path: "data-entry", label: "Data Entry", icon: <FiEdit /> },
   { path: "dashboard", label: "Dashboard", icon: <FiLayers /> },
   { path: "analytics", label: "Analytics", icon: <FiTrendingUp /> },
+  { path: "forecasting", label: "AI Forecasting", icon: <FiActivity /> },
   { path: "reports", label: "Reports", icon: <FiFileText /> },
   { path: "settings", label: "Settings", icon: <FiSettings /> }
 ];
@@ -21,6 +22,7 @@ const links = [
 export default function Sidebar({ collapsed }) {
   return (
     <div
+      className="no-print"
       style={{
         width: collapsed ? "80px" : "260px",
         flexShrink: 0,

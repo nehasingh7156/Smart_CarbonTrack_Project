@@ -8,7 +8,7 @@ TREND SERVICE
 exports.getTrendData = async (plant) => {
 
   const result = await PlantEntry.aggregate([
-    { $match: { plant } },
+    { $match: { plant: { $regex: new RegExp("^" + plant.trim() + "$", "i") } } },
     {
       $group: {
         _id: { month: "$month", year: "$year" },
@@ -46,7 +46,7 @@ COMPARISON SERVICE
 */
 exports.getComparisonData = async (plant, type) => {
 
-  const entries = await PlantEntry.find({ plant })
+  const entries = await PlantEntry.find({ plant: { $regex: new RegExp("^" + plant.trim() + "$", "i") } })
     .sort({ year: 1, month: 1 });
 
   if (entries.length < 2) return null;
@@ -92,7 +92,11 @@ HOTSPOT SERVICE
 */
 exports.getHotspotData = async (plant, month, year) => {
 
-  const entry = await PlantEntry.findOne({ plant, month, year });
+  const entry = await PlantEntry.findOne({
+    plant: { $regex: new RegExp("^" + plant.trim() + "$", "i") },
+    month,
+    year
+  });
   if (!entry) return null;
 
   const i = entry.inputs;

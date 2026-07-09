@@ -1,15 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
-import {
-  PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, 
-  CartesianGrid, ResponsiveContainer, BarChart, Bar, LabelList, Legend
-} from "recharts";
+import ApexCharts from "apexcharts";
 import { 
-  FiCalendar, FiChevronLeft, FiChevronRight, FiDownload, FiFileText, FiActivity, 
-  FiZap, FiTarget, FiLoader, FiSun, FiMapPin, FiPrinter, FiAlignLeft
+  FiCalendar, FiChevronLeft, FiChevronRight, FiFileText, FiActivity, 
+  FiZap, FiTarget, FiLoader, FiSun, FiMapPin, FiAlignLeft
 } from "react-icons/fi";
 import { FaFileExcel, FaFilePdf } from "react-icons/fa";
+import { triggerPrintFlow, generateExcel } from "../services/ReportExportService";
 
-const MOCK_PLANTS = ["Bhopal", "Delhi", "Mumbai", "Pune", "Chennai", "Hyderabad"];
 const REPORT_TYPES = ["Summary", "Detailed Emissions", "Energy Consumption", "Fuel Consumption", "Carbon Intensity"];
 const PERIOD_TYPES = ["Month", "Quarter", "Year"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -17,19 +14,62 @@ const QUARTERS = ["Q1 (Jan-Mar)", "Q2 (Apr-Jun)", "Q3 (Jul-Sep)", "Q4 (Oct-Dec)"
 const COLORS = ["#14b8a6", "#f59e0b", "#3b82f6", "#ef4444", "#8b5cf6", "#10b981", "#f43f5e", "#64748b"];
 
 export default function Reports() {
-  const [selectedPlant, setSelectedPlant] = useState(localStorage.getItem("plant") || "Select Plant");
+  const [selectedPlant, setSelectedPlant] = useState(localStorage.getItem("plant") || "Bhopal");
   const [selectedPeriodType, setSelectedPeriodType] = useState("Month");
   const [year, setYear] = useState(new Date().getFullYear());
   const [monthIndex, setMonthIndex] = useState(new Date().getMonth());
   const [quarterIndex, setQuarterIndex] = useState(Math.floor(new Date().getMonth() / 3));
   const [selectedReport, setSelectedReport] = useState("Summary");
   
-  const [showConfig, setShowConfig] = useState(false);
+  const [plantsList, setPlantsList] = useState([]);
   
   // Data State
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
-  const [rawResponses, setRawResponses] = useState([]);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [chartImage, setChartImage] = useState(null);
+  const [serializedImage, setSerializedImage] = useState(null);
+
+  useEffect(() => {
+    setSerializedImage(null);
+  }, [selectedReport]);
+
+  // Fetch unique plants list dynamically from backend database
+  useEffect(() => {
+    const fetchPlants = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/carbon/plants");
+        if (res.ok) {
+          const list = await res.json();
+          const savedPlant = localStorage.getItem("plant") || "";
+          const matched = list.find(p => p.trim().toLowerCase() === savedPlant.trim().toLowerCase());
+          
+          const combined = Array.from(new Set([
+            matched || savedPlant || "Bhopal",
+            ...list
+          ].filter(Boolean)));
+          
+          setPlantsList(combined);
+          if (matched) {
+            setSelectedPlant(matched);
+          } else if (savedPlant) {
+            setSelectedPlant(savedPlant);
+          } else if (combined.length > 0) {
+            setSelectedPlant(combined[0]);
+          }
+        } else {
+          const current = localStorage.getItem("plant") || "Bhopal";
+          setPlantsList([current]);
+          setSelectedPlant(current);
+        }
+      } catch {
+        const current = localStorage.getItem("plant") || "Bhopal";
+        setPlantsList([current]);
+        setSelectedPlant(current);
+      }
+    };
+    fetchPlants();
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -54,7 +94,6 @@ export default function Reports() {
       const results = await Promise.all(promises);
       const valids = results.filter(d => d && d.inputs && d.kpis);
       
-      setRawResponses(valids);
       const aggregated = valids.reduce((acc, d) => {
         const i = d.inputs;
         const p = i.powerConsumption || {};
@@ -91,13 +130,19 @@ export default function Reports() {
   };
 
   useEffect(() => {
+    setSerializedImage(null);
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPlant, selectedPeriodType, monthIndex, quarterIndex, year]);
 
   const handlePrint = () => {
-    window.print();
+    triggerPrintFlow(serializedImage, setChartImage, setIsPrinting);
   };
-  
+
+  const handleExportExcel = () => {
+    generateExcel(reportData, selectedPlant, selectedReport, getPeriodLabel(), year);
+  };
+
   const getPeriodLabel = () => {
     if (selectedPeriodType === "Month") return `${MONTHS[monthIndex]} ${year}`;
     if (selectedPeriodType === "Quarter") return `${QUARTERS[quarterIndex]} ${year}`;
@@ -113,14 +158,153 @@ export default function Reports() {
       color: "#0f172a"
     }}>
       
-      {/* Hide controls when printing */}
-      <style>{`
+      {/* Dynamic & Centered Print Styling */}
+      <style dangerouslySetInnerHTML={{ __html: `
         @media print {
+          @page {
+            size: A4 portrait;
+            margin: 10mm;
+          }
           .no-print { display: none !important; }
-          body { background: white !important; }
-          .report-container { box-shadow: none !important; border: none !important; margin: 0 !important; padding: 0 !important; }
+          body, html {
+            background: white !important;
+            color: #000000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            font-family: 'Inter', sans-serif !important;
+            width: auto !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          
+          /* Full page print layout expansion */
+          .app-layout-container {
+            display: block !important;
+            height: auto !important;
+            min-height: auto !important;
+            overflow: visible !important;
+          }
+          .app-content-column {
+            display: block !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          .app-main-content {
+            padding: 0 !important;
+            background: transparent !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          
+          /* Lock report container width to a stable desktop dimension to preserve layout */
+          .report-container {
+            box-shadow: none !important;
+            border: none !important;
+            margin: 0 auto !important;
+            padding: 24px !important;
+            background: white !important;
+            width: 960px !important;
+            max-width: 960px !important;
+            min-width: 960px !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+          }
+          
+          .report-header-print {
+            text-align: center !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border-bottom: 2px solid #0f766e !important;
+            padding-bottom: 20px !important;
+            margin-bottom: 30px !important;
+          }
+          .tags-container-print {
+            display: flex !important;
+            justify-content: center !important;
+            gap: 12px !important;
+            margin-top: 12px !important;
+            flex-wrap: wrap !important;
+          }
+          
+          /* Keep two columns side-by-side exactly as on-screen */
+          .report-grid-2col {
+            display: grid !important;
+            grid-template-columns: 435px 435px !important;
+            gap: 30px !important;
+            width: 900px !important;
+            max-width: 900px !important;
+            box-sizing: border-box !important;
+            page-break-inside: avoid !important;
+          }
+          .report-grid-2col > div {
+            width: 435px !important;
+            max-width: 435px !important;
+            box-sizing: border-box !important;
+            page-break-inside: avoid !important;
+          }
+          
+          /* Lock Recharts wrapper and SVG width/height to fit perfectly without overflow */
+          .recharts-responsive-container {
+            width: 100% !important;
+            height: 250px !important;
+            max-width: 100% !important;
+            min-width: 100% !important;
+          }
+          .recharts-wrapper {
+            width: 405px !important;
+            height: 250px !important;
+            max-width: 405px !important;
+            min-width: 405px !important;
+          }
+          .recharts-surface {
+            width: 405px !important;
+            height: 250px !important;
+            max-width: 405px !important;
+            min-width: 405px !important;
+          }
+          
+          table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+          }
+          th {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+            border-bottom: 2px solid #cbd5e1 !important;
+            padding: 8px 10px !important;
+          }
+          td {
+            border-bottom: 1px solid #e2e8f0 !important;
+            padding: 8px 10px !important;
+          }
+          .print-only-header {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            border-bottom: 1px solid #cbd5e1 !important;
+            padding-bottom: 8px !important;
+            margin-bottom: 15px !important;
+            font-size: 11px !important;
+            color: #64748b !important;
+          }
+          .print-only-footer {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            border-top: 1px solid #cbd5e1 !important;
+            padding-top: 8px !important;
+            font-size: 10px !important;
+            color: #64748b !important;
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+          }
         }
-      `}</style>
+      ` }} />
 
       {/* HEADER SECTION */}
       <div className="no-print" style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", marginBottom: 32 }}>
@@ -144,7 +328,7 @@ export default function Reports() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <label style={labelStyle}><FiMapPin/> Plant Location</label>
                 <select style={inputStyle} value={selectedPlant} onChange={e => setSelectedPlant(e.target.value)}>
-                    {MOCK_PLANTS.map(p => <option key={p} value={p}>{p}</option>)}
+                    {plantsList.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
             </div>
 
@@ -168,22 +352,22 @@ export default function Reports() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                  <label style={labelStyle}>Select {selectedPeriodType}</label>
                  <div style={{ display: "flex", gap: 8 }}>
-                     {selectedPeriodType === "Month" && (
-                         <select style={inputStyle} value={monthIndex} onChange={e => setMonthIndex(parseInt(e.target.value))}>
-                             {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-                         </select>
-                     )}
-                     {selectedPeriodType === "Quarter" && (
-                         <select style={inputStyle} value={quarterIndex} onChange={e => setQuarterIndex(parseInt(e.target.value))}>
-                             {QUARTERS.map((q, i) => <option key={q} value={i}>{q}</option>)}
-                         </select>
-                     )}
-                     <div style={{ display: "flex", alignItems: "center", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: 8, padding: "0 4px" }}>
-                        <button onClick={() => setYear(y => y-1)} style={{ border: "none", background: "none", color: "#0f766e", cursor: "pointer", padding: "6px" }}><FiChevronLeft/></button>
-                        <span style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: "0 8px" }}>{year}</span>
-                        <button onClick={() => setYear(y => y+1)} style={{ border: "none", background: "none", color: "#0f766e", cursor: "pointer", padding: "6px" }}><FiChevronRight/></button>
-                     </div>
-                 </div>
+                      {selectedPeriodType === "Month" && (
+                          <select style={inputStyle} value={monthIndex} onChange={e => setMonthIndex(parseInt(e.target.value))}>
+                              {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+                          </select>
+                      )}
+                      {selectedPeriodType === "Quarter" && (
+                          <select style={inputStyle} value={quarterIndex} onChange={e => setQuarterIndex(parseInt(e.target.value))}>
+                              {QUARTERS.map((q, i) => <option key={q} value={i}>{q}</option>)}
+                          </select>
+                      )}
+                      <div style={{ display: "flex", alignItems: "center", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: 8, padding: "0 4px" }}>
+                         <button onClick={() => setYear(y => y-1)} style={{ border: "none", background: "none", color: "#0f766e", cursor: "pointer", padding: "6px" }}><FiChevronLeft/></button>
+                         <span style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", padding: "0 8px" }}>{year}</span>
+                         <button onClick={() => setYear(y => y+1)} style={{ border: "none", background: "none", color: "#0f766e", cursor: "pointer", padding: "6px" }}><FiChevronRight/></button>
+                      </div>
+                  </div>
             </div>
 
             {/* Report Type Selector */}
@@ -211,11 +395,17 @@ export default function Reports() {
           minHeight: 600, position: "relative"
       }}>
           
+        {/* PRINT ONLY HEADER */}
+        <div className="print-only-header" style={{ display: "none" }}>
+            <span style={{ fontWeight: 800, color: "#0f766e" }}>SmartCarbonTrack Platform</span>
+            <span>Corporate ESG compliance record</span>
+        </div>
+
         {/* Output Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #f1f5f9", paddingBottom: 20, marginBottom: 30 }}>
-            <div>
-                <h2 style={{ margin: 0, fontSize: 28, color: "#0f172a", fontWeight: 800 }}>{selectedReport} Report</h2>
-                <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+        <div className="report-header-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #f1f5f9", paddingBottom: 20, marginBottom: 30 }}>
+            <div className="header-content-print">
+                <h2 className="report-title-print" style={{ margin: 0, fontSize: 28, color: "#0f172a", fontWeight: 800 }}>{selectedReport} Report</h2>
+                <div style={{ display: "flex", gap: 12, marginTop: 12, flexWrap: "wrap" }} className="tags-container-print">
                     <Tag icon={<FiMapPin/>} text={selectedPlant} />
                     <Tag icon={<FiCalendar/>} text={getPeriodLabel()} />
                     <Tag icon={<FiFileText/>} text={`Generated: ${new Date().toLocaleDateString()}`} bg="#f0fdf4" color="#16a34a" />
@@ -224,16 +414,15 @@ export default function Reports() {
             
             <div className="no-print" style={{ display: "flex", gap: 8 }}>
                 <button onClick={handlePrint} style={actionButtonStyle} title="Print/Save as PDF"><FaFilePdf size={18} /> Export PDF</button>
-                <button onClick={() => alert("Excel export functionality to be integrated.")} style={actionButtonStyle} title="Export CSV Data"><FaFileExcel size={18} /> Export Excel</button>
+                <button onClick={handleExportExcel} style={actionButtonStyle} title="Export Excel Data"><FaFileExcel size={18} /> Export Excel</button>
             </div>
         </div>
-
-        {/* Dynamic Report Content */}
+              {/* Dynamic Report Content */}
         {loading ? (
              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: 100, color: "#0f766e" }}>
                  <FiLoader size={48} style={{ animation: "spin 1s linear infinite", marginBottom: 16 }} />
                  <h3 style={{ margin: 0 }}>Compiling Report...</h3>
-                 <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+                  <style dangerouslySetInnerHTML={{ __html: "@keyframes spin { 100% { transform: rotate(360deg); } }" }} />
              </div>
         ) : !reportData || reportData.count === 0 ? (
             <div style={{ textAlign: "center", padding: 80, color: "#94a3b8" }}>
@@ -241,8 +430,14 @@ export default function Reports() {
                 <h3>No data found for the selected parameters.</h3>
             </div>
         ) : (
-            <ReportRenderer type={selectedReport} data={reportData} rawResponses={rawResponses} />
+            <ReportRenderer type={selectedReport} data={reportData} isPrinting={isPrinting} chartImage={chartImage} setSerializedImage={setSerializedImage} />
         )}
+
+        {/* PRINT ONLY FOOTER */}
+        <div className="print-only-footer" style={{ display: "none" }}>
+            <span>SmartCarbonTrack © {new Date().getFullYear()} | Corporate Compliance Document</span>
+            <span>Period: {getPeriodLabel()} | Category: {selectedReport}</span>
+        </div>
       </div>
 
     </div>
@@ -260,7 +455,7 @@ function Tag({ icon, text, bg = "#f1f5f9", color = "#475569" }) {
     </div>
 }
 
-function ReportRenderer({ type, data, rawResponses }) {
+function ReportRenderer({ type, data, isPrinting, chartImage, setSerializedImage }) {
     const totalPower = data.power.grid + data.power.renew + data.power.solar;
     const renewRatio = totalPower > 0 ? ((data.power.renew + data.power.solar) / totalPower * 100).toFixed(1) : 0;
     const intensity = data.prod > 0 ? (data.carbon / data.prod).toFixed(4) : 0;
@@ -276,7 +471,55 @@ function ReportRenderer({ type, data, rawResponses }) {
     const scope2 = (data.power.grid * 0.82) / 1000;
 
     switch (type) {
-        case "Summary":
+        case "Summary": {
+            const summaryOptions = {
+              chart: {
+                type: "donut",
+                height: 250,
+                toolbar: { show: false },
+                animations: { enabled: false }
+              },
+              colors: ["#f97316", "#3b82f6"],
+              series: [scope1, scope2],
+              labels: ["Scope 1 (Direct)", "Scope 2 (Indirect)"],
+              legend: {
+                position: "bottom",
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 600,
+                labels: { colors: "#475569" }
+              },
+              dataLabels: {
+                enabled: true,
+                formatter: (val, opts) => `${opts.w.globals.series[opts.seriesIndex].toFixed(2)} MT`
+              },
+              plotOptions: {
+                pie: {
+                  donut: {
+                    size: '65%',
+                    labels: {
+                      show: true,
+                      name: { show: true, fontSize: '14px', fontWeight: 600, color: '#64748b' },
+                      value: {
+                        show: true,
+                        fontSize: '18px',
+                        fontWeight: 800,
+                        color: '#0f172a',
+                        formatter: (val) => `${parseFloat(val).toFixed(2)} MT`
+                      },
+                      total: {
+                        show: true,
+                        label: "Total CO₂e",
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#64748b',
+                        formatter: () => `${(scope1 + scope2).toFixed(2)} MT`
+                      }
+                    }
+                  }
+                }
+              }
+            };
+
             return (
                 <div style={{ display: "flex", flexDirection: "column", gap: 30 }}>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20 }}>
@@ -286,18 +529,14 @@ function ReportRenderer({ type, data, rawResponses }) {
                         <StatCard label="Renewable Mix" value={renewRatio} unit="%" icon={<FiSun/>} color="#10b981" />
                     </div>
                     
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }}>
+                    <div className="report-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }}>
                         <ReportBox title="Footprint Breakdown (Scope 1 vs 2)">
-                            <ResponsiveContainer width="100%" height={250}>
-                                <PieChart>
-                                    <Pie data={[{n: "Scope 1 (Direct)", v: scope1}, {n: "Scope 2 (Indirect)", v: scope2}]} dataKey="v" nameKey="n" innerRadius={60} outerRadius={80} paddingAngle={5}>
-                                        <Cell fill="#f97316" />
-                                        <Cell fill="#3b82f6" />
-                                    </Pie>
-                                    <RechartsTooltip formatter={(v) => v.toFixed(2) + " MT"} />
-                                    <Legend />
-                                </PieChart>
-                            </ResponsiveContainer>
+                            <ReportsApexChart
+                                options={summaryOptions}
+                                isPrinting={isPrinting}
+                                chartImage={chartImage}
+                                onChartRendered={setSerializedImage}
+                            />
                         </ReportBox>
                         
                         <ReportBox title="High Level Observations">
@@ -311,8 +550,59 @@ function ReportRenderer({ type, data, rawResponses }) {
                     </div>
                 </div>
             );
+        }
 
-        case "Detailed Emissions":
+        case "Detailed Emissions": {
+            const detailedOptions = {
+              chart: {
+                type: "bar",
+                height: 300,
+                toolbar: { show: false },
+                animations: { enabled: false }
+              },
+              colors: ["#14b8a6"],
+              series: [{
+                name: "Emissions",
+                data: [
+                  parseFloat(s1_hsd.toFixed(3)),
+                  parseFloat(s1_fur.toFixed(3)),
+                  parseFloat(s1_lpg.toFixed(3)),
+                  parseFloat(s1_png.toFixed(3)),
+                  parseFloat(scope2.toFixed(3))
+                ]
+              }],
+              xaxis: {
+                categories: ["HSD", "Furnace", "LPG", "PNG", "Grid"],
+                labels: { style: { fontFamily: "'Inter', sans-serif", fontWeight: 600, colors: "#475569" } }
+              },
+              yaxis: {
+                labels: {
+                  formatter: (val) => `${val.toFixed(2)} MT`,
+                  style: { fontFamily: "'Inter', sans-serif", fontWeight: 600, colors: "#475569" }
+                }
+              },
+              grid: {
+                borderColor: "rgba(226, 232, 240, 0.6)",
+                strokeDasharray: 4
+              },
+              plotOptions: {
+                bar: {
+                  borderRadius: 4,
+                  columnWidth: '50%',
+                  dataLabels: { position: 'top' }
+                }
+              },
+              dataLabels: {
+                enabled: true,
+                formatter: (val) => `${val.toFixed(2)}`,
+                offsetY: -20,
+                style: {
+                  fontSize: '12px',
+                  colors: ["#334155"]
+                }
+              }
+            };
+
             return (
                 <div style={{ display: "flex", flexDirection: "column", gap: 30 }}>
                     <ReportBox title="Emissions Inventory Table" border>
@@ -342,43 +632,84 @@ function ReportRenderer({ type, data, rawResponses }) {
                     </ReportBox>
                     
                     <ReportBox title="Emissions by Source Group">
-                        <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={[
-                                    { name: "HSD", val: s1_hsd }, { name: "Furnace", val: s1_fur }, 
-                                    { name: "LPG", val: s1_lpg }, { name: "PNG", val: s1_png },
-                                    { name: "Grid", val: scope2 }
-                                ]} margin={{ top: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis dataKey="name" />
-                                <YAxis />
-                                <RechartsTooltip cursor={{fill:"#f1f5f9"}} formatter={v=>v.toFixed(2)+" MT"} />
-                                <Bar dataKey="val" fill="#14b8a6" radius={[4,4,0,0]}>
-                                    <LabelList dataKey="val" position="top" formatter={v=>v.toFixed(1)} />
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
+                        <ReportsApexChart
+                            options={detailedOptions}
+                            isPrinting={isPrinting}
+                            chartImage={chartImage}
+                            onChartRendered={setSerializedImage}
+                        />
                     </ReportBox>
                 </div>
             );
+        }
 
-        case "Energy Consumption":
+        case "Energy Consumption": {
             const eMix = [
                 { name: "Grid", val: data.power.grid },
                 { name: "Renewable", val: data.power.renew },
                 { name: "Solar", val: data.power.solar }
-            ];
+            ].filter(d => d.val > 0);
+
+            const energyOptions = {
+              chart: {
+                type: "donut",
+                height: 300,
+                toolbar: { show: false },
+                animations: { enabled: false }
+              },
+              colors: ["#ef4444", "#10b981", "#eab308"],
+              series: eMix.map(d => d.val),
+              labels: eMix.map(d => d.name),
+              legend: {
+                position: "bottom",
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 600,
+                labels: { colors: "#475569" }
+              },
+              dataLabels: {
+                enabled: true,
+                formatter: (val, opts) => `${opts.w.globals.series[opts.seriesIndex].toLocaleString()} kWh`
+              },
+              plotOptions: {
+                pie: {
+                  donut: {
+                    size: '65%',
+                    labels: {
+                      show: true,
+                      name: { show: true, fontSize: '14px', fontWeight: 600, color: '#64748b' },
+                      value: {
+                        show: true,
+                        fontSize: '18px',
+                        fontWeight: 800,
+                        color: '#0f172a',
+                        formatter: (val) => `${parseInt(val).toLocaleString()} kWh`
+                      },
+                      total: {
+                        show: true,
+                        label: "Total Power",
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#64748b',
+                        formatter: () => {
+                          const total = eMix.reduce((acc, curr) => acc + curr.val, 0);
+                          return `${total.toLocaleString()} kWh`;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            };
+
             return (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }}>
+                <div className="report-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }}>
                     <ReportBox title="Electricity Mix Breakdown">
-                        <ResponsiveContainer width="100%" height={300}>
-                            <PieChart>
-                                <Pie data={eMix.filter(d=>d.val > 0)} dataKey="val" nameKey="name" innerRadius={60} outerRadius={90} label>
-                                    {eMix.map((e,i) => <Cell key={i} fill={COLORS[i]} />)}
-                                </Pie>
-                                <RechartsTooltip formatter={(v) => v.toLocaleString() + " kWh"} />
-                                <Legend />
-                            </PieChart>
-                        </ResponsiveContainer>
+                        <ReportsApexChart
+                            options={energyOptions}
+                            isPrinting={isPrinting}
+                            chartImage={chartImage}
+                            onChartRendered={setSerializedImage}
+                        />
                     </ReportBox>
                     <ReportBox title="Energy Performance Summary" border>
                          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -392,27 +723,62 @@ function ReportRenderer({ type, data, rawResponses }) {
                     </ReportBox>
                 </div>
             );
+        }
 
-        case "Fuel Consumption":
-            const fMix = [
-                { name: "HSD", val: data.fuel.hsd }, { name: "Furnace", val: data.fuel.fur },
-                { name: "PNG", val: data.fuel.png }, { name: "LPG", val: data.fuel.lpg },
-                { name: "Biomass", val: data.fuel.bio }
-            ];
+        case "Fuel Consumption": {
+            const fuelOptions = {
+              chart: {
+                type: "bar",
+                height: 300,
+                toolbar: { show: false },
+                animations: { enabled: false }
+              },
+              colors: ["#f59e0b"],
+              series: [{
+                name: "Consumption",
+                data: [data.fuel.hsd, data.fuel.fur, data.fuel.png, data.fuel.lpg, data.fuel.bio]
+              }],
+              xaxis: {
+                categories: ["HSD", "Furnace", "PNG", "LPG", "Biomass"],
+                labels: { style: { fontFamily: "'Inter', sans-serif", fontWeight: 600, colors: "#475569" } }
+              },
+              yaxis: {
+                labels: {
+                  style: { fontFamily: "'Inter', sans-serif", fontWeight: 600, colors: "#475569" }
+                }
+              },
+              grid: {
+                borderColor: "rgba(226, 232, 240, 0.6)",
+                strokeDasharray: 4
+              },
+              plotOptions: {
+                bar: {
+                  borderRadius: 4,
+                  horizontal: true,
+                  barHeight: '60%',
+                  dataLabels: { position: 'right' }
+                }
+              },
+              dataLabels: {
+                enabled: true,
+                formatter: (val) => `${val.toLocaleString()}`,
+                offsetX: 10,
+                style: {
+                  fontSize: '11px',
+                  colors: ["#334155"]
+                }
+              }
+            };
+
             return (
-                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }}>
+                 <div className="report-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }}>
                     <ReportBox title="Fuel Source Analysis">
-                         <ResponsiveContainer width="100%" height={300}>
-                            <BarChart layout="vertical" data={fMix} margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                                <XAxis type="number" />
-                                <YAxis dataKey="name" type="category" />
-                                <RechartsTooltip cursor={{fill:"#f1f5f9"}} />
-                                <Bar dataKey="val" fill="#f59e0b" barSize={25} radius={[0,4,4,0]}>
-                                     <LabelList dataKey="val" position="right" formatter={v=>v.toLocaleString()} />
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
+                        <ReportsApexChart
+                            options={fuelOptions}
+                            isPrinting={isPrinting}
+                            chartImage={chartImage}
+                            onChartRendered={setSerializedImage}
+                        />
                     </ReportBox>
                     <ReportBox title="Green Fuel Highlights" border>
                          <div style={{ background: "#f0fdf4", padding: 20, borderRadius: 12, border: "1px solid #bbf7d0", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
@@ -426,8 +792,9 @@ function ReportRenderer({ type, data, rawResponses }) {
                     </ReportBox>
                 </div>
             );
+        }
 
-        case "Carbon Intensity":
+        case "Carbon Intensity": {
             return (
                  <div style={{ display: "flex", flexDirection: "column", gap: 30 }}>
                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
@@ -436,10 +803,10 @@ function ReportRenderer({ type, data, rawResponses }) {
                          <StatCard label="Calculated Intensity" value={intensity} unit="kg CO₂/L" icon={<FiTarget/>} color="#10b981" />
                      </div>
                      <ReportBox title="Intensity Metric Use-cases">
-                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                         <div className="report-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
                              <div style={{ padding: 20, background: "#f8fafc", borderRadius: 12 }}>
                                  <h4 style={{ margin: "0 0 10px 0", color: "#0f172a" }}>Internal Scorecards</h4>
-                                 <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>Intensity measures efficiency regardless of scale. Tracking this helps validate if production optimizations are truly decoupling emissions from growth.</p>
+                                  <p style={{ margin: 0, color: "#475569", lineHeight: 1.6 }}>Intensity measures efficiency regardless of scale. Tracking this helps validate if production optimizations are truly decoupling emissions from growth.</p>
                              </div>
                              <div style={{ padding: 20, background: "#f8fafc", borderRadius: 12 }}>
                                  <h4 style={{ margin: "0 0 10px 0", color: "#0f172a" }}>Compliance vs Target</h4>
@@ -449,6 +816,7 @@ function ReportRenderer({ type, data, rawResponses }) {
                      </ReportBox>
                  </div>
             );
+        }
 
         default:
             return <div>Report view not found.</div>;
@@ -498,5 +866,67 @@ function ReportBox({ title, children, border }) {
             <h3 style={{ margin: "0 0 20px 0", fontSize: 18, color: "#1e293b", fontWeight: 800 }}>{title}</h3>
             {children}
         </div>
-    )
+    );
+}
+
+function ReportsApexChart({ options, isPrinting, chartImage, onChartRendered }) {
+  const ref = useRef(null);
+  const instance = useRef(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    if (instance.current) {
+      instance.current.destroy();
+    }
+
+    const finalOptions = {
+      ...options,
+      chart: {
+        ...options.chart,
+        animations: {
+          enabled: false // animations disabled on reports to support instant serialization
+        }
+      }
+    };
+
+    instance.current = new ApexCharts(ref.current, finalOptions);
+    instance.current.render().then(() => {
+      if (onChartRendered && instance.current) {
+        setTimeout(() => {
+          if (instance.current) {
+            instance.current.dataURI().then(({ imgURI }) => {
+              onChartRendered(imgURI);
+            }).catch(err => console.error("ApexCharts dataURI error:", err));
+          }
+        }, 150);
+      }
+    });
+
+    return () => {
+      if (instance.current) {
+        instance.current.destroy();
+        instance.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options, isPrinting]);
+
+  return (
+    <div style={{ position: "relative", width: "100%", height: options.chart.height }}>
+      {isPrinting && chartImage ? (
+        <img 
+          src={chartImage} 
+          style={{ 
+            width: "100%", 
+            height: options.chart.height, 
+            display: "block", 
+            objectFit: "contain" 
+          }} 
+          alt="Chart Export" 
+        />
+      ) : (
+        <div ref={ref} style={{ width: "100%", height: "100%" }} />
+      )}
+    </div>
+  );
 }
