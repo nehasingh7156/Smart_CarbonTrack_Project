@@ -38,6 +38,17 @@ const escapeRegex = (string) => {
   return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
 };
 
+const normalizeName = (val) => {
+  if (!val) return "";
+  return val
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .split(" ")
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
 exports.submitData = async (req, res) => {
   try {
 
@@ -195,16 +206,127 @@ exports.getDashboard = async (req, res) => {
 
 exports.getAllPlants = async (req, res) => {
   try {
-    const plants = await PlantEntry.distinct("plant");
-    const trimmedPlants = [...new Set(plants.map(p => p.trim()))];
-    res.json(trimmedPlants);
+    const Plant = require("../models/plant");
+    const plants = await Plant.find({}).sort({ name: 1 });
+    const plantNames = plants.map(p => p.name);
+    res.json(plantNames);
   } catch (error) {
     console.error(error);
     res.status(500).json({
-      error: "Internal Server Error"
+      success: false,
+      message: "Internal Server Error"
     });
   }
 };
+
+exports.getPlantsList = async (req, res) => {
+  try {
+    const Plant = require("../models/plant");
+    const plants = await Plant.find({}).sort({ name: 1 });
+    res.json({
+      success: true,
+      data: plants
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch plants."
+    });
+  }
+};
+
+exports.addPlant = async (req, res) => {
+  try {
+    const Plant = require("../models/plant");
+    let { name, state, city } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Plant name is required."
+      });
+    }
+    if (!state || !state.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "State name is required."
+      });
+    }
+
+    const normalizedName = normalizeName(name);
+    const normalizedState = normalizeName(state);
+    const normalizedCity = city ? normalizeName(city) : "";
+
+    // Check duplicate plant names case-insensitively
+    const escapedName = escapeRegex(normalizedName);
+    const duplicate = await Plant.findOne({
+      name: { $regex: new RegExp("^" + escapedName + "$", "i") }
+    });
+
+    if (duplicate) {
+      return res.status(400).json({
+        success: false,
+        message: "Plant already exists."
+      });
+    }
+
+    const newPlant = new Plant({
+      name: normalizedName,
+      state: normalizedState,
+      city: normalizedCity
+    });
+
+    await newPlant.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Plant added successfully.",
+      data: newPlant
+    });
+  } catch (error) {
+    console.error("Add plant error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to add plant."
+    });
+  }
+};
+
+exports.deletePlant = async (req, res) => {
+  try {
+    const Plant = require("../models/plant");
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Plant ID is required."
+      });
+    }
+
+    const deletedPlant = await Plant.findByIdAndDelete(id);
+
+    if (!deletedPlant) {
+      return res.status(404).json({
+        success: false,
+        message: "Plant not found."
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Plant deleted successfully."
+    });
+  } catch (error) {
+    console.error("Delete plant error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete plant."
+    });
+  }
+};
+
 
 exports.getAllEntries = async (req, res) => {
   try {

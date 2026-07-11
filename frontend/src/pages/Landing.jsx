@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
-  FiMapPin, FiLock, FiUser, FiArrowRight, FiActivity 
+  FiMapPin, FiLock, FiUser, FiArrowRight, FiActivity, FiEye, FiEyeOff 
 } from "react-icons/fi";
 
 export default function Landing() {
@@ -17,6 +17,8 @@ export default function Landing() {
   const [adminPassword, setAdminPassword] = useState("");
 
   // UI States
+  const [showManagerPassword, setShowManagerPassword] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [plantFocus, setPlantFocus] = useState(false);
   const [passFocus, setPassFocus] = useState(false);
   const [adminFocus, setAdminFocus] = useState(false);
@@ -266,7 +268,7 @@ export default function Landing() {
                       color: passFocus ? "#10b981" : "#94a3b8"
                     }} />
                     <input
-                      type="password"
+                      type={showManagerPassword ? "text" : "password"}
                       placeholder="Security Password"
                       value={managerPassword}
                       onChange={(e) => setManagerPassword(e.target.value)}
@@ -278,6 +280,14 @@ export default function Landing() {
                         boxShadow: passFocus ? "0 0 12px rgba(16, 185, 129, 0.15)" : "none"
                       }}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowManagerPassword(prev => !prev)}
+                      style={styles.eyeButton}
+                      aria-label={showManagerPassword ? "Hide password" : "Show password"}
+                    >
+                      {showManagerPassword ? <FiEyeOff /> : <FiEye />}
+                    </button>
                   </div>
                 </>
               ) : (
@@ -310,7 +320,7 @@ export default function Landing() {
                       color: adminPassFocus ? "#10b981" : "#94a3b8"
                     }} />
                     <input
-                      type="password"
+                      type={showAdminPassword ? "text" : "password"}
                       placeholder="Password"
                       value={adminPassword}
                       onChange={(e) => setAdminPassword(e.target.value)}
@@ -322,6 +332,14 @@ export default function Landing() {
                         boxShadow: adminPassFocus ? "0 0 12px rgba(16, 185, 129, 0.15)" : "none"
                       }}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminPassword(prev => !prev)}
+                      style={styles.eyeButton}
+                      aria-label={showAdminPassword ? "Hide password" : "Show password"}
+                    >
+                      {showAdminPassword ? <FiEyeOff /> : <FiEye />}
+                    </button>
                   </div>
                 </>
               )}
@@ -635,7 +653,7 @@ const styles = {
   },
 
   input: {
-    padding: "15px 16px 15px 44px",
+    padding: "15px 44px 15px 44px",
     width: "100%",
     boxSizing: "border-box",
     borderRadius: "14px",
@@ -646,6 +664,22 @@ const styles = {
     outline: "none",
     fontWeight: "600",
     transition: "all 0.25s ease-out"
+  },
+
+  eyeButton: {
+    position: "absolute",
+    right: "16px",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0,
+    color: "#94a3b8",
+    fontSize: "18px",
+    outline: "none",
+    zIndex: 10
   },
 
   button: {

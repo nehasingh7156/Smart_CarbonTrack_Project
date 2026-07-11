@@ -22,6 +22,28 @@ export default function AdminReports() {
   const [monthIndex, setMonthIndex] = useState(new Date().getMonth());
   const [quarterIndex, setQuarterIndex] = useState(Math.floor(new Date().getMonth() / 3));
   const [selectedReport, setSelectedReport] = useState("Summary");
+  const [plantsList, setPlantsList] = useState([]);
+  
+  useEffect(() => {
+    const fetchPlants = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/carbon/plants`);
+        if (res.ok) {
+          const list = await res.json();
+          setPlantsList(list);
+          if (list.length > 0) {
+            const savedPlant = localStorage.getItem("plant") || "";
+            const matched = list.find(p => p.trim().toLowerCase() === savedPlant.trim().toLowerCase());
+            setSelectedPlant(matched || list[0]);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching plants for admin reports:", err);
+      }
+    };
+    fetchPlants();
+  }, []);
+
   
   // Data State
   const [loading, setLoading] = useState(false);
@@ -152,7 +174,8 @@ export default function AdminReports() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <label style={labelStyle}><FiMapPin/> Plant Location</label>
                 <select style={inputStyle} value={selectedPlant} onChange={e => setSelectedPlant(e.target.value)}>
-                    {MOCK_PLANTS.map(p => <option key={p} value={p}>{p}</option>)}
+                    {plantsList.map(p => <option key={p} value={p}>{p}</option>)}
+                    {plantsList.length === 0 && <option value="">No Plants Available</option>}
                 </select>
             </div>
 

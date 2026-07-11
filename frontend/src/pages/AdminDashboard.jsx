@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaIndustry, FaExclamationTriangle, FaCheckCircle, FaChartLine } from "react-icons/fa";
-import { FiActivity, FiLayers, FiAlertCircle, FiCpu, FiClock } from "react-icons/fi";
+import { FiActivity, FiLayers, FiAlertCircle, FiClock, FiPlus, FiTrash2, FiSearch, FiLoader } from "react-icons/fi";
 import AdminReports from "../components/AdminReports";
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -14,7 +14,6 @@ const PLANT_CAPS = {
   "Hyderabad": 10000
 };
 const DEFAULT_CAP = 7500;
-const STANDARD_PLANTS = ["Bhopal", "Delhi", "Mumbai", "Pune", "Chennai", "Hyderabad"];
 
 // Subtle industrial factory outline background illustration
 const FactoryOutlineSvg = () => (
@@ -153,19 +152,43 @@ const DashboardBackground = () => (
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [allEntries, setAllEntries] = useState([]);
+  const [plantsList, setPlantsList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const fetchData = () => {
-    fetch(  `${API_BASE}/api/carbon/all-entries`)
-      .then(res => res.ok ? res.json() : [])
-      .then(data => {
-        setAllEntries(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Error fetching admin entries:", err);
-        setLoading(false);
-      });
+  // Modals & Action States
+  const [actionLoading, setActionLoading] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newPlantName, setNewPlantName] = useState("");
+  const [newPlantState, setNewPlantState] = useState("");
+  const [newPlantCity, setNewPlantCity] = useState("");
+  const [plantToDelete, setPlantToDelete] = useState(null); // { id: "...", name: "..." }
+  const [notification, setNotification] = useState(null); // { type: "success" | "error", message: "..." }
+
+  const showToast = (message, type = "success") => {
+    setNotification({ message, type });
+    setTimeout(() => { setNotification(null); }, 4000);
+  };
+
+  const fetchData = async () => {
+    try {
+      const [entriesRes, plantsRes] = await Promise.all([
+        fetch(`${API_BASE}/api/carbon/all-entries`),
+        fetch(`${API_BASE}/api/carbon/plants-list`)
+      ]);
+      
+      const entriesData = entriesRes.ok ? await entriesRes.json() : [];
+      const plantsData = plantsRes.ok ? await plantsRes.json() : { success: false, data: [] };
+
+      setAllEntries(entriesData);
+      if (plantsData.success) {
+        setPlantsList(plantsData.data);
+      }
+    } catch (err) {
+      console.error("Error fetching admin dashboard data:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -174,16 +197,93 @@ export default function AdminDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  const getPlantMetrics = () => {
-    const dbPlants = [...new Set(allEntries.map(e => e.plant?.trim()))].filter(Boolean);
-    const uniquePlants = [...new Set([...STANDARD_PLANTS, ...dbPlants])];
+  const handleAddPlant = async () => {
+    const trimmedName = newPlantName.trim();
+    const trimmedState = newPlantState.trim();
+    const trimmedCity = newPlantCity.trim();
 
-    return uniquePlants.map(plantName => {
+    if (!trimmedName) {
+      showToast("Plant Name is required.", "error");
+      return;
+    }
+    if (!trimmedState) {
+      showToast("State name is required.", "error");
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/carbon/admin/plant`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-role": "admin"
+        },
+        body: JSON.stringify({
+          name: trimmedName,
+          state: trimmedState,
+          city: trimmedCity
+        })
+      });
+
+      const result = await response.json();
+      if (response.ok && result.success) {
+        showToast(result.message || "Plant added successfully.", "success");
+        setShowAddModal(false);
+        setNewPlantName("");
+        setNewPlantState("");
+        setNewPlantCity("");
+        fetchData();
+      } else {
+        showToast(result.message || "Failed to add plant.", "error");
+      }
+    } catch (err) {
+      console.error("Add plant network error:", err);
+      showToast("Failed to add plant.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeletePlant = async () => {
+    if (!plantToDelete) return;
+
+    setActionLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/carbon/admin/plant/${plantToDelete.id}`, {
+        method: "DELETE",
+        headers: {
+          "x-user-role": "admin"
+        }
+      });
+
+      const result = await response.json();
+      if (response.ok && result.success) {
+        showToast(result.message || "Plant deleted successfully.", "success");
+        setPlantToDelete(null);
+        fetchData();
+      } else {
+        showToast(result.message || "Failed to delete plant.", "error");
+      }
+    } catch (err) {
+      console.error("Delete plant network error:", err);
+      showToast("Failed to delete plant.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const getPlantMetrics = () => {
+    return plantsList.map(plantObj => {
+      const plantName = plantObj.name;
       const plantRecords = allEntries.filter(e => e.plant?.trim().toLowerCase() === plantName.toLowerCase());
 
       if (plantRecords.length === 0) {
         return {
+          id: plantObj._id,
           name: plantName,
+          state: plantObj.state,
+          city: plantObj.city,
           footprintValue: 0,
           threshold: PLANT_CAPS[plantName] || DEFAULT_CAP,
           production: 0,
@@ -207,7 +307,10 @@ export default function AdminDashboard() {
       const lastUpdatedStr = `${formattedMonth} ${latest.year}`;
 
       return {
+        id: plantObj._id,
         name: plantName,
+        state: plantObj.state,
+        city: plantObj.city,
         footprintValue: footprint,
         threshold: threshold,
         production: production,
@@ -218,6 +321,15 @@ export default function AdminDashboard() {
   };
 
   const plants = getPlantMetrics();
+
+  const filteredPlants = plants.filter(p => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return true;
+    const nameMatch = p.name.toLowerCase().includes(query);
+    const stateMatch = (p.state || "").toLowerCase().includes(query);
+    const cityMatch = (p.city || "").toLowerCase().includes(query);
+    return nameMatch || stateMatch || cityMatch;
+  });
 
   const totalPlants = plants.length;
   const activeNodesCount = plants.filter(p => p.hasData).length;
@@ -236,6 +348,29 @@ export default function AdminDashboard() {
     <div style={styles.container}>
       {/* Animated background */}
       <DashboardBackground />
+
+      {/* Toast Notification */}
+      {notification && (
+        <div style={{
+          position: "fixed",
+          top: "24px",
+          right: "24px",
+          backgroundColor: notification.type === "success" ? "#10b981" : "#ef4444",
+          color: "white",
+          padding: "16px 24px",
+          borderRadius: "12px",
+          boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          zIndex: 9999,
+          fontWeight: 700,
+          animation: "slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards"
+        }}>
+          {notification.type === "success" ? <FaCheckCircle size={18} /> : <FiAlertCircle size={18} />}
+          <span>{notification.message}</span>
+        </div>
+      )}
       
       {/* TOP PREMIUM HERO BANNER */}
       <div style={styles.heroBanner}>
@@ -300,14 +435,169 @@ export default function AdminDashboard() {
 
       </div>
 
+      {/* ACTION BAR */}
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: "16px",
+        marginTop: "12px",
+        marginBottom: "8px"
+      }}>
+        {/* Search Input */}
+        <div style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          flex: "0 1 360px",
+          width: "100%"
+        }}>
+          <FiSearch style={{
+            position: "absolute",
+            left: "14px",
+            color: "#94a3b8",
+            fontSize: "18px"
+          }} />
+          <input
+            type="text"
+            placeholder="Search by Plant, State, or City..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{
+              padding: "12px 14px 12px 42px",
+              borderRadius: "12px",
+              border: "1px solid rgba(226, 232, 240, 0.8)",
+              background: "#ffffff",
+              color: "#0f172a",
+              fontSize: "14px",
+              fontWeight: "600",
+              width: "100%",
+              outline: "none",
+              boxShadow: "0 4px 12px rgba(15, 23, 42, 0.02)",
+              transition: "all 0.2s"
+            }}
+            onFocus={e => {
+              e.target.style.borderColor = "#10b981";
+              e.target.style.boxShadow = "0 0 10px rgba(16, 185, 129, 0.1)";
+            }}
+            onBlur={e => {
+              e.target.style.borderColor = "rgba(226, 232, 240, 0.8)";
+              e.target.style.boxShadow = "0 4px 12px rgba(15, 23, 42, 0.02)";
+            }}
+          />
+        </div>
+
+        {/* Add Plant Button */}
+        <button
+          onClick={() => setShowAddModal(true)}
+          style={{
+            background: "linear-gradient(135deg, #0f766e 0%, #0d9488 100%)",
+            color: "#ffffff",
+            border: "none",
+            borderRadius: "12px",
+            padding: "12px 20px",
+            fontSize: "14px",
+            fontWeight: "700",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            boxShadow: "0 4px 12px rgba(15, 118, 110, 0.2)",
+            transition: "all 0.2s"
+          }}
+          onMouseEnter={e => e.currentTarget.style.transform = "translateY(-1px)"}
+          onMouseLeave={e => e.currentTarget.style.transform = "none"}
+        >
+          <FiPlus size={18} /> Add Plant
+        </button>
+      </div>
+
       {loading ? (
         <div style={{ display: "flex", justifyContent: "center", padding: 60 }}>
           <p style={{ color: "#64748b", fontWeight: 700 }}>Synchronizing operational logs...</p>
         </div>
+      ) : plantsList.length === 0 ? (
+        /* EMPTY STATE - NO PLANTS EXIST */
+        <div style={{
+          background: "#ffffff",
+          borderRadius: "20px",
+          padding: "60px 40px",
+          textAlign: "center",
+          border: "1px dashed rgba(16, 185, 129, 0.3)",
+          boxShadow: "0 4px 20px rgba(15, 23, 42, 0.02)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "16px",
+          marginTop: "12px"
+        }}>
+          <div style={{
+            width: "64px",
+            height: "64px",
+            borderRadius: "50%",
+            background: "rgba(15, 118, 110, 0.05)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#0f766e"
+          }}>
+            <FaIndustry size={28} />
+          </div>
+          <div>
+            <h3 style={{ margin: "0 0 6px 0", color: "#0f172a", fontSize: "18px", fontWeight: "800" }}>
+              No plants available yet.
+            </h3>
+            <p style={{ margin: 0, color: "#64748b", fontSize: "14px", fontWeight: "500" }}>
+              Click Add Plant to create your first plant.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            style={{
+              background: "linear-gradient(135deg, #0f766e 0%, #0d9488 100%)",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "10px",
+              padding: "10px 20px",
+              fontSize: "13px",
+              fontWeight: "700",
+              cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(15, 118, 110, 0.15)",
+              marginTop: "8px"
+            }}
+          >
+            Add First Plant
+          </button>
+        </div>
+      ) : filteredPlants.length === 0 ? (
+        /* EMPTY STATE - NO PLANTS MATCH FILTER */
+        <div style={{
+          background: "#ffffff",
+          borderRadius: "20px",
+          padding: "60px 40px",
+          textAlign: "center",
+          border: "1px dashed #cbd5e1",
+          boxShadow: "0 4px 20px rgba(15, 23, 42, 0.02)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "10px",
+          marginTop: "12px"
+        }}>
+          <h3 style={{ margin: 0, color: "#0f172a", fontSize: "16px", fontWeight: "800" }}>
+            No plants match your search.
+          </h3>
+          <p style={{ margin: 0, color: "#64748b", fontSize: "13px", fontWeight: "500" }}>
+            Try checking the spelling or search for another state or city.
+          </p>
+        </div>
       ) : (
         /* PLANT GRID */
         <div style={styles.grid}>
-          {plants.map((plant) => {
+          {filteredPlants.map((plant) => {
             const isHigh = plant.hasData && plant.footprintValue > plant.threshold;
             const ratioPercent = plant.hasData 
               ? Math.min(100, Math.round((plant.footprintValue / plant.threshold) * 100))
@@ -315,7 +605,7 @@ export default function AdminDashboard() {
 
             return (
               <div
-                key={plant.name}
+                key={plant.id}
                 className="premium-card"
                 style={{
                   ...styles.card,
@@ -331,13 +621,40 @@ export default function AdminDashboard() {
                     <FaIndustry size={18} color="#0f766e" />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <h2 style={styles.cardTitle}>{plant.name} Node</h2>
-                    <span style={styles.plantTag}>Industrial Complex</span>
+                    <h2 style={styles.cardTitle}>{plant.name}</h2>
+                    <span style={styles.plantTag}>
+                      {plant.city ? `${plant.city}, ` : ''}{plant.state}
+                    </span>
                   </div>
-                  {/* Last updated timestamp */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#64748b", fontSize: "11px", fontWeight: 700, zIndex: 1 }}>
-                    <FiClock size={12} />
-                    <span>{plant.lastUpdated}</span>
+                  {/* Last updated timestamp & Delete option */}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, zIndex: 5 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#64748b", fontSize: "11px", fontWeight: 700 }}>
+                      <FiClock size={12} />
+                      <span>{plant.lastUpdated}</span>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPlantToDelete({ id: plant.id, name: plant.name });
+                      }}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color: "#ef4444",
+                        cursor: "pointer",
+                        padding: "4px",
+                        borderRadius: "6px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        transition: "0.2s"
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.08)"}
+                      onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}
+                      title="Delete Plant"
+                    >
+                      <FiTrash2 size={16} />
+                    </button>
                   </div>
                 </div>
 
@@ -418,6 +735,100 @@ export default function AdminDashboard() {
       <div className="premium-card" style={styles.reportsSection}>
         <AdminReports />
       </div>
+
+      {/* ADD PLANT MODAL */}
+      {showAddModal && (
+        <div style={styles.modalBackdrop}>
+          <div style={styles.modalContent}>
+            <h2 style={{ margin: 0, fontSize: "22px", fontWeight: "900", color: "#0f172a", letterSpacing: "-0.5px" }}>
+              Add Manufacturing Plant
+            </h2>
+            <p style={{ margin: 0, fontSize: "13px", color: "#64748b" }}>
+              Register a new production node under the enterprise monitoring catalog.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "11px", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>Plant Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Delhi Plant"
+                  value={newPlantName}
+                  onChange={e => setNewPlantName(e.target.value)}
+                  disabled={actionLoading}
+                  style={styles.modalInput}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "11px", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>State *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Delhi"
+                  value={newPlantState}
+                  onChange={e => setNewPlantState(e.target.value)}
+                  disabled={actionLoading}
+                  style={styles.modalInput}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "11px", fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>City (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. New Delhi"
+                  value={newPlantCity}
+                  onChange={e => setNewPlantCity(e.target.value)}
+                  disabled={actionLoading}
+                  style={styles.modalInput}
+                />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "10px" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!actionLoading) {
+                    setShowAddModal(false);
+                    setNewPlantName("");
+                    setNewPlantState("");
+                    setNewPlantCity("");
+                  }
+                }}
+                disabled={actionLoading}
+                style={styles.modalCancelBtn}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddPlant}
+                disabled={actionLoading}
+                style={styles.modalSubmitBtn}
+              >
+                {actionLoading ? <FiLoader className="spinner" style={{ animation: "spin 1s linear infinite" }} /> : "Add Plant"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE PLANT MODAL */}
+      {plantToDelete && (
+        <div style={styles.modalBackdrop}>
+          <div style={styles.modalContent}>
+            <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "900", color: "#ef4444", letterSpacing: "-0.5px" }}>
+              Delete "{plantToDelete.name}"?
+            </h2>
+            <p style={{ margin: 0, fontSize: "14px", color: "#475569", lineHeight: "1.6" }}>
+              This will remove the plant from the Admin Overview.<br />
+              Historical reports will remain available.
+            </p>
+            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "8px" }}>
+              <button onClick={() => setPlantToDelete(null)} style={styles.modalCancelBtn}>Cancel</button>
+              <button onClick={handleDeletePlant} disabled={actionLoading} style={styles.modalDeleteBtn}>{actionLoading ? <FiLoader className="spinner" /> : "Delete"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -629,6 +1040,77 @@ const styles = {
     marginTop: "20px",
     padding: "24px",
     borderRadius: "24px"
+  },
+  modalBackdrop: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(15, 23, 42, 0.3)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000
+  },
+  modalContent: {
+    background: "#ffffff",
+    borderRadius: "24px",
+    padding: "32px",
+    width: "100%",
+    maxWidth: "480px",
+    boxShadow: "0 20px 50px rgba(15, 118, 110, 0.08), 0 0 0 1px rgba(16, 185, 129, 0.1)",
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    gap: "20px",
+    animation: "modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards"
+  },
+  modalInput: { padding: "12px 14px", borderRadius: "10px", border: "1.5px solid #cbd5e1", fontSize: "14px", width: "100%", boxSizing: "border-box", outline: "none", color: "#0f172a" },
+  modalCancelBtn: {
+    padding: "12px 20px",
+    borderRadius: "10px",
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: "#475569",
+    fontWeight: "700",
+    fontSize: "13px",
+    cursor: "pointer",
+    transition: "0.2s"
+  },
+  modalSubmitBtn: {
+    padding: "12px 24px",
+    borderRadius: "10px",
+    border: "none",
+    background: "linear-gradient(135deg, #0f766e 0%, #0d9488 100%)",
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: "13px",
+    cursor: "pointer",
+    boxShadow: "0 4px 12px rgba(15, 118, 110, 0.2)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: "110px",
+    transition: "0.2s"
+  },
+  modalDeleteBtn: {
+    padding: "12px 24px",
+    borderRadius: "10px",
+    border: "none",
+    background: "#ef4444",
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: "13px",
+    cursor: "pointer",
+    boxShadow: "0 4px 12px rgba(239, 68, 68, 0.2)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: "90px",
+    transition: "0.2s"
   }
 };
 
@@ -691,6 +1173,25 @@ styleSheet.innerText = `
     transform-origin: 80px 40px;
     animation: pulseNode 3s ease-in-out infinite;
     animation-delay: 2s;
+  }
+
+  /* Slide in toast animation */
+  @keyframes slideIn {
+    from { transform: translateX(120%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  /* Modal scale-up animation */
+  @keyframes modalFadeIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  .spinner {
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    100% { transform: rotate(360deg); }
   }
 `;
 document.head.appendChild(styleSheet);
