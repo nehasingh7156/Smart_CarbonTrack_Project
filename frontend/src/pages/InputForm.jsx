@@ -118,7 +118,7 @@ export default function InputForm() {
 
   try {
   const response = await fetch(
-    "${API_BASE}/api/carbon/entry",
+      `${API_BASE}/api/carbon/entry`,
     {
       method: "POST",
       headers: {
