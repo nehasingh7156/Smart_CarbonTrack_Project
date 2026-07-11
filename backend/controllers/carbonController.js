@@ -79,19 +79,20 @@ exports.submitData = async (req, res) => {
     const yearVal = parseYear(plantData.year);
 
     let dbEntry = await PlantEntry.findOne({
-      plant: { $regex: new RegExp("^" + escapeRegex(plantName) + "$", "i") },
+      plant: { $regex: new RegExp("^\\s*" + escapeRegex(plantName) + "\\s*$", "i") },
       month: monthVal,
       year: yearVal
     });
 
     if (dbEntry) {
+      dbEntry.plant = dbEntry.plant.trim();
       dbEntry.inputs = plantData;
       dbEntry.kpis = kpis;
       dbEntry.timestamp = new Date();
       await dbEntry.save();
     } else {
       dbEntry = new PlantEntry({
-        plant: plantName,
+        plant: plantName.trim(),
         month: monthVal,
         year: yearVal,
         inputs: plantData,
@@ -133,9 +134,24 @@ exports.getData = async (req, res) => {
       });
     }
 
-    const data = await PlantEntry.find({
-      plant: { $regex: new RegExp("^" + escapeRegex(userId.trim()) + "$", "i") }
-    });
+    const trimmedUser = userId.trim();
+    const queryCond = {
+      plant: { $regex: new RegExp("^\\s*" + escapeRegex(trimmedUser) + "\\s*$", "i") }
+    };
+
+    console.log(`[DEBUG] GET /api/carbon/plant-data/:userId`);
+    console.log(`- Plant selected: "${userId}" (trimmed: "${trimmedUser}")`);
+    console.log(`- Query conditions:`, JSON.stringify(queryCond));
+
+    const data = await PlantEntry.find(queryCond);
+
+    console.log(`- Number of records retrieved: ${data.length}`);
+    if (data.length > 0) {
+      const monthsFound = data.map(d => `${d.month}/${d.year}`);
+      console.log(`- Months found:`, monthsFound);
+    } else {
+      console.log(`- Failed matches: No records found in DB matching query condition.`);
+    }
 
     res.json(data);
 
@@ -156,7 +172,7 @@ exports.getDashboard = async (req, res) => {
     year = parseYear(year);
 
     const data = await PlantEntry.findOne({
-      plant: { $regex: new RegExp("^" + escapeRegex(plant.trim()) + "$", "i") },
+      plant: { $regex: new RegExp("^\\s*" + escapeRegex(plant.trim()) + "\\s*$", "i") },
       month,
       year
     });
@@ -180,7 +196,20 @@ exports.getDashboard = async (req, res) => {
 exports.getAllPlants = async (req, res) => {
   try {
     const plants = await PlantEntry.distinct("plant");
-    res.json(plants);
+    const trimmedPlants = [...new Set(plants.map(p => p.trim()))];
+    res.json(trimmedPlants);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Internal Server Error"
+    });
+  }
+};
+
+exports.getAllEntries = async (req, res) => {
+  try {
+    const data = await PlantEntry.find({});
+    res.json(data);
   } catch (error) {
     console.error(error);
     res.status(500).json({

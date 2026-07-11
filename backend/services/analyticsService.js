@@ -1,5 +1,9 @@
 const PlantEntry = require("../models/plantentry");
 
+const escapeRegex = (string) => {
+  return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+};
+
 /*
 ========================================
 TREND SERVICE
@@ -8,7 +12,7 @@ TREND SERVICE
 exports.getTrendData = async (plant) => {
 
   const result = await PlantEntry.aggregate([
-    { $match: { plant: { $regex: new RegExp("^" + plant.trim() + "$", "i") } } },
+    { $match: { plant: { $regex: new RegExp("^\\s*" + escapeRegex(plant.trim()) + "\\s*$", "i") } } },
     {
       $group: {
         _id: { month: "$month", year: "$year" },
@@ -46,7 +50,7 @@ COMPARISON SERVICE
 */
 exports.getComparisonData = async (plant, type) => {
 
-  const entries = await PlantEntry.find({ plant: { $regex: new RegExp("^" + plant.trim() + "$", "i") } })
+  const entries = await PlantEntry.find({ plant: { $regex: new RegExp("^\\s*" + escapeRegex(plant.trim()) + "\\s*$", "i") } })
     .sort({ year: 1, month: 1 });
 
   if (entries.length < 2) return null;
@@ -93,7 +97,7 @@ HOTSPOT SERVICE
 exports.getHotspotData = async (plant, month, year) => {
 
   const entry = await PlantEntry.findOne({
-    plant: { $regex: new RegExp("^" + plant.trim() + "$", "i") },
+    plant: { $regex: new RegExp("^\\s*" + escapeRegex(plant.trim()) + "\\s*$", "i") },
     month,
     year
   });

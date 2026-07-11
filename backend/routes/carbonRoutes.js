@@ -20,5 +20,6 @@ router.get(
 );
 
 router.get('/plants', carbonController.getAllPlants);
+router.get('/all-entries', carbonController.getAllEntries);
 
 module.exports = router;

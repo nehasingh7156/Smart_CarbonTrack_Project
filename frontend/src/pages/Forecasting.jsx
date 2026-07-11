@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, memo } from "react";
 import ApexCharts from "apexcharts";
 import { 
-  FiActivity, FiZap, FiTarget, FiSun, FiSettings, FiLoader, 
-  FiChevronRight, FiAlertCircle, FiCheckCircle, FiTrendingUp,
+  FiActivity, FiZap, FiTarget, FiSun, FiLoader, 
+  FiAlertCircle, FiCheckCircle, FiTrendingUp,
   FiTrendingDown, FiMapPin, FiCompass, FiShield, FiSliders, FiCpu
 } from "react-icons/fi";
 import { FaLeaf, FaCar, FaTree, FaBolt } from "react-icons/fa";
@@ -18,6 +18,44 @@ const FACTORS = {
   HSD_TO_MJ: 38,
   PNG_TO_MJ: 35,
   FURNACE_TO_MJ: 40
+};
+
+const PRESETS = {
+  "Current Operations": { renewable: 15, fuel: 0, electricity: 0, production: 0, offset: 0, efficiency: 0 },
+  "Green Transition": { renewable: 40, fuel: -10, electricity: -5, production: 5, offset: 10, efficiency: 15 },
+  "Renewable Energy Expansion": { renewable: 75, fuel: 0, electricity: 5, production: 10, offset: 5, efficiency: 10 },
+  "Aggressive Carbon Reduction": { renewable: 90, fuel: -30, electricity: -15, production: 0, offset: 25, efficiency: 25 },
+  "Net Zero Roadmap": { renewable: 100, fuel: -50, electricity: -25, production: 0, offset: 50, efficiency: 40 }
+};
+
+// OLS Linear Regression Helper
+const calculateLinearTrend = (data, valueExtractor) => {
+  const n = data.length;
+  if (n === 0) return { slope: 0, intercept: 0 };
+  
+  let sumX = 0;
+  let sumY = 0;
+  let sumXY = 0;
+  let sumX2 = 0;
+  
+  for (let i = 0; i < n; i++) {
+    const x = i;
+    const y = valueExtractor(data[i]);
+    sumX += x;
+    sumY += y;
+    sumXY += x * y;
+    sumX2 += x * x;
+  }
+  
+  const denominator = n * sumX2 - sumX * sumX;
+  if (denominator === 0) {
+    return { slope: 0, intercept: sumY / n };
+  }
+  
+  const slope = (n * sumXY - sumX * sumY) / denominator;
+  const intercept = (sumY - slope * sumX) / n;
+  
+  return { slope, intercept };
 };
 
 export default function Forecasting() {
@@ -61,24 +99,33 @@ export default function Forecasting() {
   // Fetch plant historical data
   useEffect(() => {
     if (!selectedPlant) return;
-    setTimeout(() => {
-      setLoading(true);
-    }, 0);
+    setLoading(true);
+    console.log(`[DEBUG] Frontend requesting forecasting data for plant: "${selectedPlant}"`);
     fetch(`http://localhost:5000/api/carbon/plant-data/${encodeURIComponent(selectedPlant)}`)
-      .then(res => res.ok ? res.json() : [])
+      .then(res => {
+        console.log(`[DEBUG] API Response Status: ${res.status}`);
+        return res.ok ? res.json() : [];
+      })
       .then(data => {
+        console.log(`[DEBUG] Received ${data.length} records from backend`);
         if (Array.isArray(data)) {
           // Sort by year and month ascending
           const sorted = data.sort((a, b) => {
             if (a.year !== b.year) return a.year - b.year;
             return a.month - b.month;
           });
+          const monthsFound = sorted.map(d => `${d.month}/${d.year}`);
+          console.log(`[DEBUG] Sorted historical months:`, monthsFound);
           setHistoricalData(sorted);
         } else {
+          console.warn("[DEBUG] Received non-array data response");
           setHistoricalData([]);
         }
       })
-      .catch(() => setHistoricalData([]))
+      .catch((err) => {
+        console.error("[DEBUG] Failed to fetch historical data:", err);
+        setHistoricalData([]);
+      })
       .finally(() => {
         setLoading(false);
       });
@@ -87,186 +134,194 @@ export default function Forecasting() {
   // Handle Scenario presets
   const applyScenarioPreset = (scenarioName) => {
     setActiveScenario(scenarioName);
-    switch (scenarioName) {
-      case "Current Operations":
-        setSliderRenewable(15);
-        setSliderFuel(0);
-        setSliderElectricity(0);
-        setSliderProduction(0);
-        setSliderOffset(0);
-        setSliderEfficiency(0);
-        break;
-      case "Green Transition":
-        setSliderRenewable(40);
-        setSliderFuel(-10);
-        setSliderElectricity(-5);
-        setSliderProduction(5);
-        setSliderOffset(10);
-        setSliderEfficiency(15);
-        break;
-      case "Renewable Energy Expansion":
-        setSliderRenewable(75);
-        setSliderFuel(0);
-        setSliderElectricity(5);
-        setSliderProduction(10);
-        setSliderOffset(5);
-        setSliderEfficiency(10);
-        break;
-      case "Aggressive Carbon Reduction":
-        setSliderRenewable(90);
-        setSliderFuel(-30);
-        setSliderElectricity(-15);
-        setSliderProduction(0);
-        setSliderOffset(25);
-        setSliderEfficiency(25);
-        break;
-      case "Net Zero Roadmap":
-        setSliderRenewable(100);
-        setSliderFuel(-50);
-        setSliderElectricity(-25);
-        setSliderProduction(0);
-        setSliderOffset(50);
-        setSliderEfficiency(40);
-        break;
-      default:
-        // Custom scenario leaves sliders alone
-        break;
+    const preset = PRESETS[scenarioName];
+    if (preset) {
+      setSliderRenewable(preset.renewable);
+      setSliderFuel(preset.fuel);
+      setSliderElectricity(preset.electricity);
+      setSliderProduction(preset.production);
+      setSliderOffset(preset.offset);
+      setSliderEfficiency(preset.efficiency);
     }
   };
 
   // Trigger apply scenario once plant data changes
   useEffect(() => {
-    setTimeout(() => {
+    if (historicalData.length >= 6) {
       applyScenarioPreset("Green Transition");
-    }, 0);
+    }
   }, [historicalData]);
+
+  const hasSufficientData = historicalData.length >= 6;
 
   // Baseline Extraction
   const getBaseline = () => {
-    const latest = historicalData.length > 0 ? historicalData[historicalData.length - 1] : null;
-    
-    // Default baseline values (Bhopal/Delhi equivalents) if DB is empty
-    const production = latest?.inputs?.beverageProduction || latest?.inputs?.production || 5000000;
-    const grid = latest?.inputs?.powerConsumption?.gridPowerKWh || 240000;
-    const renewable = latest?.inputs?.powerConsumption?.renewablePowerKWh || 45000;
-    const solar = latest?.inputs?.powerConsumption?.solarPowerKWh || 18000;
-    
-    const lpg = latest?.inputs?.fuelConsumption?.lpgKg || 2200;
-    const furnace = latest?.inputs?.fuelConsumption?.furnaceOilLitre || 7500;
-    const png = latest?.inputs?.fuelConsumption?.pngSCM || 3800;
-    const hsd = latest?.inputs?.fuelConsumption?.hsdLitre || 14000;
-    const biomass = latest?.inputs?.fuelConsumption?.biomassMJ || 11000;
+    if (historicalData.length === 0) {
+      return {
+        production: 5000000, grid: 240000, renewable: 45000, solar: 18000,
+        totalElectricity: 303000, lpg: 2200, furnace: 7500, png: 3800,
+        hsd: 14000, biomass: 11000, carbonMT: 200, energyMJ: 1200000,
+        renewablePercent: 20, carbonIntensity: 0.04, credits: 100, compliance: 50
+      };
+    }
 
-    const totalElectricity = grid + renewable + solar;
+    // Average of latest up to 12 records
+    const numEntries = Math.min(12, historicalData.length);
+    const startIdx = historicalData.length - numEntries;
+    const slice = historicalData.slice(startIdx);
 
-    // Calculate baseline metrics
-    const gridEmissions = grid * FACTORS.GRID_CO2;
-    const fuelEmissions = lpg * FACTORS.LPG_CO2 + furnace * FACTORS.FURNACE_CO2 + png * FACTORS.PNG_CO2 + hsd * FACTORS.HSD_CO2;
-    const carbonKG = gridEmissions + fuelEmissions;
-    const carbonMT = carbonKG / 1000;
-    const energyMJ = totalElectricity * FACTORS.KWH_TO_MJ + lpg * FACTORS.LPG_TO_MJ + furnace * FACTORS.FURNACE_TO_MJ + png * FACTORS.PNG_TO_MJ + hsd * FACTORS.HSD_TO_MJ + biomass;
-    const renewablePercent = ((renewable + solar) / (totalElectricity || 1)) * 100;
-    const carbonIntensity = carbonKG / (production || 1);
-    
-    // Dynamic credit calculation
-    const greenCredit = Math.round((renewable + solar) * 0.05);
-    const bioCredit = Math.round(biomass * 0.01);
-    const credits = greenCredit + bioCredit;
+    const sum = slice.reduce((acc, curr) => {
+      const inputs = curr.inputs || {};
+      const p = inputs.powerConsumption || {};
+      const f = inputs.fuelConsumption || {};
+      const k = curr.kpis || {};
 
-    // Compliance Score
-    let compliance = 50;
-    if (renewablePercent >= 25) compliance += 25;
-    else compliance += (renewablePercent / 25) * 25;
-    if (biomass > 0) compliance += 15;
-    if (carbonIntensity < 0.08) compliance += 10;
-    compliance = Math.min(99, Math.round(compliance));
+      acc.production += inputs.beverageProduction || inputs.production || 0;
+      acc.grid += p.gridPowerKWh || 0;
+      acc.renewable += p.renewablePowerKWh || 0;
+      acc.solar += p.solarPowerKWh || 0;
+      
+      acc.lpg += f.lpgKg || 0;
+      acc.furnace += f.furnaceOilLitre || 0;
+      acc.png += (f.pngSCM || f.pngScm || 0);
+      acc.hsd += f.hsdLitre || 0;
+      acc.biomass += (f.biomassMJ || f.biomassMj || 0);
 
-    return {
-      production,
-      grid,
-      renewable,
-      solar,
-      totalElectricity,
-      lpg,
-      furnace,
-      png,
-      hsd,
-      biomass,
-      carbonMT,
-      energyMJ,
-      renewablePercent,
-      carbonIntensity,
-      credits,
-      compliance
+      acc.carbonMT += k.totalCarbonMT ? parseFloat(k.totalCarbonMT) : 0;
+      acc.energyMJ += k.totalEnergyMJ || 0;
+      return acc;
+    }, {
+      production: 0, grid: 0, renewable: 0, solar: 0,
+      lpg: 0, furnace: 0, png: 0, hsd: 0, biomass: 0,
+      carbonMT: 0, energyMJ: 0
+    });
+
+    const baseline = {
+      production: sum.production / numEntries,
+      grid: sum.grid / numEntries,
+      renewable: sum.renewable / numEntries,
+      solar: sum.solar / numEntries,
+      totalElectricity: (sum.grid + sum.renewable + sum.solar) / numEntries,
+      lpg: sum.lpg / numEntries,
+      furnace: sum.furnace / numEntries,
+      png: sum.png / numEntries,
+      hsd: sum.hsd / numEntries,
+      biomass: sum.biomass / numEntries,
+      carbonMT: sum.carbonMT / numEntries,
+      energyMJ: sum.energyMJ / numEntries
     };
+
+    baseline.renewablePercent = baseline.totalElectricity > 0
+      ? ((baseline.renewable + baseline.solar) / baseline.totalElectricity) * 100
+      : 0;
+    
+    baseline.carbonIntensity = (baseline.carbonMT * 1000) / (baseline.production || 1);
+
+    const greenCredit = Math.round((baseline.renewable + baseline.solar) * 0.05);
+    const bioCredit = Math.round(baseline.biomass * 0.01);
+    baseline.credits = greenCredit + bioCredit;
+
+    let compliance = 50;
+    if (baseline.renewablePercent >= 25) compliance += 25;
+    else compliance += (baseline.renewablePercent / 25) * 25;
+    if (baseline.biomass > 0) compliance += 15;
+    if (baseline.carbonIntensity < 0.08) compliance += 10;
+    baseline.compliance = Math.min(99, Math.round(compliance));
+
+    return baseline;
   };
 
   const baseline = getBaseline();
 
-  // Projection Calculations
-  const getProjections = () => {
+  // Slope calculation
+  const getSlopes = () => {
+    if (!hasSufficientData) {
+      return { production: 0, electricity: 0, fuel: 0, emissions: 0 };
+    }
+
+    const trendProd = calculateLinearTrend(historicalData, d => d.inputs?.beverageProduction || d.inputs?.production || 0);
+    const trendElec = calculateLinearTrend(historicalData, d => {
+      const p = d.inputs?.powerConsumption || {};
+      return (p.gridPowerKWh || 0) + (p.renewablePowerKWh || 0) + (p.solarPowerKWh || 0);
+    });
+    const trendFuel = calculateLinearTrend(historicalData, d => {
+      const f = d.inputs?.fuelConsumption || {};
+      return (f.lpgKg || 0) + (f.furnaceOilLitre || 0) + (f.pngSCM || f.pngScm || 0) + (f.hsdLitre || 0) + (f.biomassMJ || f.biomassMj || 0);
+    });
+    const trendEmissions = calculateLinearTrend(historicalData, d => d.kpis?.totalCarbonMT ? parseFloat(d.kpis.totalCarbonMT) : 0);
+
+    return {
+      production: trendProd.slope * 12,
+      electricity: trendElec.slope * 12,
+      fuel: trendFuel.slope * 12,
+      emissions: trendEmissions.slope * 12
+    };
+  };
+
+  const slopes = getSlopes();
+
+  // Dynamic projection calculations
+  const projectDataPoints = (sliders, baselineData, slopesData) => {
     const currentYear = new Date().getFullYear();
     const dataPoints = [];
 
     for (let y = 1; y <= 10; y++) {
       const yearLabel = currentYear + y;
       
-      // Growth factor based on production capacity slider
-      const prodGrowthFactor = 1 + (sliderProduction / 100) + (0.02 * y);
-      const projProduction = baseline.production * prodGrowthFactor;
+      const trendProduction = Math.max(0, baselineData.production + slopesData.production * y);
+      const prodGrowthFactor = 1 + (sliders.production / 100);
+      const projProduction = trendProduction * prodGrowthFactor;
       
-      // Electricity needed adjusted by electricity slider and efficiency improvement slider
-      const electricityFactor = (1 + sliderElectricity / 100) * prodGrowthFactor;
-      const efficiencyReduction = 1 - (sliderEfficiency / 100) - (0.015 * y);
-      const projElectricity = Math.max(0.4, efficiencyReduction) * baseline.totalElectricity * electricityFactor;
+      const trendElectricity = Math.max(0, baselineData.totalElectricity + slopesData.electricity * y);
+      const electricitySliderFactor = 1 + (sliders.electricity / 100);
+      const efficiencyReduction = Math.max(0.4, 1 - (sliders.efficiency / 100));
+      const projElectricity = trendElectricity * electricitySliderFactor * efficiencyReduction;
 
-      // Split electricity based on renewable slider
-      const projRenewable = projElectricity * (sliderRenewable / 100);
-      const projGrid = projElectricity * (1 - sliderRenewable / 100);
+      const projRenewable = projElectricity * (sliders.renewable / 100);
+      const projGrid = projElectricity * (1 - sliders.renewable / 100);
 
-      // Fuel factors
-      const fuelFactor = (1 + sliderFuel / 100) * prodGrowthFactor * Math.max(0.4, efficiencyReduction);
-      const projLpg = baseline.lpg * fuelFactor;
-      const projFurnace = baseline.furnace * fuelFactor;
-      const projPng = baseline.png * fuelFactor;
-      const projHsd = baseline.hsd * fuelFactor;
-      const projBiomass = baseline.biomass * fuelFactor;
+      const trendFuelSum = Math.max(0, (baselineData.lpg + baselineData.furnace + baselineData.png + baselineData.hsd + baselineData.biomass) + slopesData.fuel * y);
+      const fuelSliderFactor = 1 + (sliders.fuel / 100);
+      const fuelFactor = fuelSliderFactor * efficiencyReduction;
+      
+      const baselineFuelSum = (baselineData.lpg + baselineData.furnace + baselineData.png + baselineData.hsd + baselineData.biomass) || 1;
+      const trendFuelRatio = trendFuelSum / baselineFuelSum;
 
-      // Emissions calculations
+      const projLpg = baselineData.lpg * trendFuelRatio * fuelFactor;
+      const projFurnace = baselineData.furnace * trendFuelRatio * fuelFactor;
+      const projPng = baselineData.png * trendFuelRatio * fuelFactor;
+      const projHsd = baselineData.hsd * trendFuelRatio * fuelFactor;
+      const projBiomass = baselineData.biomass * trendFuelRatio * fuelFactor;
+
       const gridEmissions = projGrid * FACTORS.GRID_CO2;
       const fuelEmissions = projLpg * FACTORS.LPG_CO2 + projFurnace * FACTORS.FURNACE_CO2 + projPng * FACTORS.PNG_CO2 + projHsd * FACTORS.HSD_CO2;
-      const offsetReduces = (sliderOffset * 100000) / 100000 * 25; // ₹1 Lakh offset investment neutralizes 25 MT
+      const offsetReduces = sliders.offset * 25; // ₹1 Lakh investment = 25 MT neutralized
       
       const rawCarbonMT = (gridEmissions + fuelEmissions) / 1000;
       const carbonMT = Math.max(0, rawCarbonMT - offsetReduces);
       const carbonIntensity = (carbonMT * 1000) / (projProduction || 1);
 
-      // Credits calculations
       const greenCredit = Math.round(projRenewable * 0.05);
       const bioCredit = Math.round(projBiomass * 0.01);
-      const offsetCredit = sliderOffset * 50; // offset investment compiles credits
+      const offsetCredit = sliders.offset * 50;
       const credits = Math.round(greenCredit + bioCredit + offsetCredit);
 
-      // Energy savings
-      const bauElectricity = baseline.totalElectricity * electricityFactor;
-      const bauEnergyMJ = baseline.energyMJ * prodGrowthFactor;
-      
       const projEnergyMJ = projElectricity * FACTORS.KWH_TO_MJ + projLpg * FACTORS.LPG_TO_MJ + projFurnace * FACTORS.FURNACE_TO_MJ + projPng * FACTORS.PNG_TO_MJ + projHsd * FACTORS.HSD_TO_MJ + projBiomass;
+      const bauEnergyMJ = baselineData.energyMJ * prodGrowthFactor;
       const energySavingsMJ = Math.max(0, bauEnergyMJ - projEnergyMJ);
 
-      // Cost savings calculations
-      const bauGridCost = bauElectricity * 8; // standard Grid tariff ₹8/kWh
-      const bauFuelCost = (baseline.lpg * 80 + baseline.furnace * 60 + baseline.png * 50 + baseline.hsd * 90) * fuelFactor;
+      const bauElectricity = baselineData.totalElectricity * electricitySliderFactor;
+      const bauGridCost = bauElectricity * 8;
+      const bauFuelCost = (baselineData.lpg * 80 + baselineData.furnace * 60 + baselineData.png * 50 + baselineData.hsd * 90) * fuelSliderFactor;
       const bauTotalCost = bauGridCost + bauFuelCost;
 
       const projGridCost = projGrid * 8;
-      const projRenewableCost = projRenewable * 4.2; // Renewable/solar PPA ₹4.2/kWh
+      const projRenewableCost = projRenewable * 4.2;
       const projFuelCost = (projLpg * 80 + projFurnace * 60 + projPng * 50 + projHsd * 90);
       const actualTotalCost = projGridCost + projRenewableCost + projFuelCost;
       const costSavings = Math.max(0, bauTotalCost - actualTotalCost);
 
-      // Compliance
-      const renewPercent = sliderRenewable;
+      const renewPercent = sliders.renewable;
       let compliance = 50;
       if (renewPercent >= 30) compliance += 25;
       else compliance += (renewPercent / 30) * 25;
@@ -290,7 +345,14 @@ export default function Forecasting() {
     return dataPoints;
   };
 
-  const projections = getProjections();
+  const projections = projectDataPoints({
+    renewable: sliderRenewable,
+    fuel: sliderFuel,
+    electricity: sliderElectricity,
+    production: sliderProduction,
+    offset: sliderOffset,
+    efficiency: sliderEfficiency
+  }, baseline, slopes);
 
   // Get index corresponding to selected duration
   const getTargetProj = () => {
@@ -300,6 +362,18 @@ export default function Forecasting() {
   };
 
   const targetProj = getTargetProj();
+
+  // Dynamic ESG Score Calculation
+  const getEsgScore = () => {
+    const renewWeight = sliderRenewable * 0.3;
+    const complianceWeight = targetProj.compliance * 0.3;
+    const reductionPercent = Math.max(0, ((baseline.carbonMT - targetProj.emissions) / (baseline.carbonMT || 1)) * 100);
+    const reductionWeight = Math.min(100, reductionPercent) * 0.3;
+    const creditsWeight = Math.min(100, (targetProj.credits / 200) * 100) * 0.1;
+    return Math.min(99, Math.round(renewWeight + complianceWeight + reductionWeight + creditsWeight));
+  };
+
+  const esgScore = getEsgScore();
 
   // Dynamic AI executive summary
   const getSummary = () => {
@@ -315,7 +389,7 @@ export default function Forecasting() {
     if (sliderRenewable < 55) {
       list.push({
         title: "Aggressive Solar PPA Procurement",
-        desc: `Switching to a hybrid solar/wind PPA to hit at least 50% renewable energy will lower grid reliance and offset emissions by an estimated ${(baseline.grid * 0.4 * 0.82 / 1000).toFixed(1)} MT CO₂e annually.`,
+        desc: `Switching to a hybrid solar/wind PPA to hit at least 55% renewable energy will lower grid reliance and offset emissions by an estimated ${(baseline.grid * 0.4 * 0.82 / 1000).toFixed(1)} MT CO₂e annually.`,
         impact: "High Impact"
       });
     }
@@ -347,8 +421,8 @@ export default function Forecasting() {
   const getEquivalents = () => {
     const totalReduction = Math.max(0, baseline.carbonMT - targetProj.emissions);
     return {
-      trees: Math.round(totalReduction * 45), // 1 ton = 45 trees grown for 10 years
-      cars: Math.round(totalReduction * 0.22), // 1 ton = 0.22 passenger cars removed for 1 year
+      trees: Math.round(totalReduction * 45), // 1 ton = 45 trees
+      cars: Math.round(totalReduction * 0.22), // 1 ton = 0.22 passenger cars
       homes: Math.round((targetProj.energySavingsMJ / 3.6) * 0.08), // energy saved equivalent homes
       coal: Math.round(totalReduction * 0.5) // coal avoided in tons
     };
@@ -361,10 +435,14 @@ export default function Forecasting() {
     const currentYear = new Date().getFullYear();
     const yearsArray = [currentYear, ...projections.map(p => p.year)];
     
-    // BAU Emissions trend (grows slightly with production)
+    // Projections calculated dynamically for scenario benchmarks
+    const currentOperationsProj = projectDataPoints(PRESETS["Current Operations"], baseline, slopes);
+    const netZeroProj = projectDataPoints(PRESETS["Net Zero Roadmap"], baseline, slopes);
+
+    // BAU Emissions trend (Current operations trendline)
     const bauEmissions = [
       baseline.carbonMT,
-      ...projections.map((p, i) => baseline.carbonMT * (1 + (sliderProduction / 100) + (0.02 * (i + 1))))
+      ...currentOperationsProj.map(p => p.emissions)
     ];
 
     // Predicted trend (slider adjustments)
@@ -373,16 +451,16 @@ export default function Forecasting() {
       ...projections.map(p => p.emissions)
     ];
 
-    // Compliance Target trend (declines 3% annually)
+    // Compliance Target trend (declines 3.5% annually)
     const targetEmissions = [
       baseline.carbonMT,
-      ...projections.map((p, i) => baseline.carbonMT * Math.max(0.3, 1 - (0.04 * (i + 1))))
+      ...projections.map((p, i) => baseline.carbonMT * Math.max(0.3, 1 - (0.035 * (i + 1))))
     ];
 
-    // Net Zero emissions path (drops to zero by year 10)
+    // Net Zero emissions path (dynamically forecasted)
     const netZeroEmissions = [
       baseline.carbonMT,
-      ...projections.map((p, i) => baseline.carbonMT * Math.max(0, 1 - (0.1 * (i + 1))))
+      ...netZeroProj.map(p => p.emissions)
     ];
 
     return {
@@ -438,22 +516,31 @@ export default function Forecasting() {
 
   // Compare scenarios table data
   const getScenarioComparison = () => {
-    // Projections for year 5
-    const y5 = projections[4];
-    
-    // BAU scenario values
-    const bauEmissions = baseline.carbonMT * 1.1;
-    
+    const baselineEmissions = baseline.carbonMT;
+
+    const currentProj = projectDataPoints(PRESETS["Current Operations"], baseline, slopes)[4];
+    const renewableProj = projectDataPoints(PRESETS["Renewable Energy Expansion"], baseline, slopes)[4];
+    const greenProj = projectDataPoints(PRESETS["Green Transition"], baseline, slopes)[4];
+    const netZeroProj = projectDataPoints(PRESETS["Net Zero Roadmap"], baseline, slopes)[4];
+    const customProj = projections[4]; // current active sliders
+
+    const getRedPct = (em) => {
+      const diff = baselineEmissions - em;
+      if (diff <= 0) return "0%";
+      return `${((diff / baselineEmissions) * 100).toFixed(0)}%`;
+    };
+
     return [
-      { name: "Current Operations", emissions: bauEmissions, reduction: "0%", credits: baseline.credits, costSavings: 0, compliance: 50, active: activeScenario === "Current Operations" },
-      { name: "Renewable Expansion", emissions: y5.emissions * 1.2, reduction: "20%", credits: y5.credits * 0.8, costSavings: y5.costSavings * 0.7, compliance: 75, active: activeScenario === "Renewable Energy Expansion" },
-      { name: "Green Transition", emissions: y5.emissions * 0.95, reduction: "32%", credits: y5.credits * 1.1, costSavings: y5.costSavings * 0.9, compliance: 85, active: activeScenario === "Green Transition" },
-      { name: "Net Zero Strategy", emissions: y5.emissions * 0.5, reduction: "68%", credits: y5.credits * 1.5, costSavings: y5.costSavings * 1.3, compliance: 99, active: activeScenario === "Net Zero Roadmap" },
-      { name: "Custom Strategy (Active)", emissions: targetProj.emissions, reduction: `${Math.max(0, ((baseline.carbonMT - targetProj.emissions) / (baseline.carbonMT || 1)) * 100).toFixed(0)}%`, credits: targetProj.credits, costSavings: targetProj.costSavings, compliance: targetProj.compliance, active: activeScenario === "Custom Scenario" }
+      { name: "Current Operations", emissions: currentProj.emissions, reduction: getRedPct(currentProj.emissions), credits: currentProj.credits, costSavings: currentProj.costSavings, compliance: currentProj.compliance, active: activeScenario === "Current Operations" },
+      { name: "Renewable Expansion", emissions: renewableProj.emissions, reduction: getRedPct(renewableProj.emissions), credits: renewableProj.credits, costSavings: renewableProj.costSavings, compliance: renewableProj.compliance, active: activeScenario === "Renewable Energy Expansion" },
+      { name: "Green Transition", emissions: greenProj.emissions, reduction: getRedPct(greenProj.emissions), credits: greenProj.credits, costSavings: greenProj.costSavings, compliance: greenProj.compliance, active: activeScenario === "Green Transition" },
+      { name: "Net Zero Strategy", emissions: netZeroProj.emissions, reduction: getRedPct(netZeroProj.emissions), credits: netZeroProj.credits, costSavings: netZeroProj.costSavings, compliance: netZeroProj.compliance, active: activeScenario === "Net Zero Roadmap" },
+      { name: "Custom Strategy (Active)", emissions: customProj.emissions, reduction: getRedPct(customProj.emissions), credits: customProj.credits, costSavings: customProj.costSavings, compliance: customProj.compliance, active: activeScenario === "Custom Scenario" }
     ];
   };
 
   const comparisonData = getScenarioComparison();
+  const currentYear = new Date().getFullYear();
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32, paddingBottom: 60 }}>
@@ -491,6 +578,29 @@ export default function Forecasting() {
           <FiLoader size={48} style={{ animation: "spin 1s linear infinite", marginBottom: 16 }} />
           <h3>Running AI forecasting engine...</h3>
           <style dangerouslySetInnerHTML={{ __html: "@keyframes spin { 100% { transform: rotate(360deg); } }" }} />
+        </div>
+      ) : !hasSufficientData ? (
+        <div style={{
+          background: "white",
+          padding: "80px 40px",
+          borderRadius: "24px",
+          border: "1px solid rgba(226, 232, 240, 0.8)",
+          boxShadow: "0 4px 20px rgba(15, 23, 42, 0.02)",
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "20px"
+        }}>
+          <FiAlertCircle size={48} color="#ef4444" />
+          <h2 style={{ fontSize: "22px", fontWeight: "800", color: "#1e293b", margin: 0 }}>
+            Insufficient Historical Data
+          </h2>
+          <p style={{ color: "#64748b", margin: 0, fontSize: "15px", maxWidth: "480px", lineHeight: "1.6", fontWeight: 500 }}>
+            At least six months of historical operational data are required to generate an accurate prediction. 
+            Currently, only {historicalData.length} {historicalData.length === 1 ? 'month' : 'months'} of records are available for the {selectedPlant} plant.
+          </p>
         </div>
       ) : (
         <>
@@ -756,7 +866,7 @@ export default function Forecasting() {
                 
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   {getRecommendations().map((r, i) => (
-                    <div key={i} style={{ borderBottom: i < 2 ? "1px dashed #cbd5e1" : "none", paddingBottom: 12 }}>
+                    <div key={i} style={{ borderBottom: i < getRecommendations().length - 1 ? "1px dashed #cbd5e1" : "none", paddingBottom: 12 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontWeight: 700, color: "#0f172a", fontSize: 14 }}>{r.title}</span>
                         <span style={{ fontSize: 11, background: "#f0fdf4", color: "#16a34a", padding: "2px 8px", borderRadius: 10, fontWeight: 700 }}>{r.impact}</span>
@@ -799,10 +909,10 @@ export default function Forecasting() {
                         {c.name} {c.active && "⭐"}
                       </td>
                       <td style={{ padding: "12px 8px" }}>{c.emissions.toFixed(1)} MT</td>
-                      <td style={{ padding: "12px 8px", color: "#10b981" }}>{c.reduction}</td>
-                      <td style={{ padding: "12px 8px" }}>{c.credits}</td>
-                      <td style={{ padding: "12px 8px" }}>₹{(c.costSavings / 100000).toFixed(1)} L</td>
-                      <td style={{ padding: "12px 8px", color: c.compliance >= 90 ? "#10b981" : "#f59e0b" }}>{c.compliance}%</td>
+                      <td style={{ padding: "12px 8px", color: c.emissions < baseline.carbonMT ? "#10b981" : "#ef4444", fontWeight: 700 }}>{c.reduction}</td>
+                      <td style={{ padding: "12px 8px" }}>{c.credits.toLocaleString()}</td>
+                      <td style={{ padding: "12px 8px" }}>₹{(c.costSavings / 100000).toFixed(1)}L</td>
+                      <td style={{ padding: "12px 8px", fontWeight: 700, color: c.compliance >= 70 ? "#0f766e" : "#f59e0b" }}>{c.compliance}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -811,31 +921,31 @@ export default function Forecasting() {
 
           </div>
 
-          {/* SECTION 8: ENVIRONMENTAL IMPACT */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 20 }} className="equiv-grid">
+          {/* SECTION 8: ENVIRONMENTAL EQUIVALENT METRICS */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24 }} className="equiv-grid">
             
             <EquivCard 
               icon={<FaTree />} 
-              label="Equivalent Trees Saved" 
-              val={`${equiv.trees.toLocaleString()}`} 
-              desc="Cumulative offset sequestration rate" 
-              color="#22c55e" 
+              label="Forest carbon Offset" 
+              val={`${equiv.trees.toLocaleString()} Trees`} 
+              desc="Equivalent trees growing for 10 years" 
+              color="#10b981" 
             />
 
             <EquivCard 
               icon={<FaCar />} 
-              label="Cars Removed From Roads" 
-              val={`${equiv.cars.toLocaleString()}`} 
-              desc="Vehicles offset based on carbon index" 
-              color="#eab308" 
+              label="Emissions Avoided" 
+              val={`${equiv.cars.toLocaleString()} Cars`} 
+              desc="Passenger vehicles offset for 1 year" 
+              color="#ef4444" 
             />
 
             <EquivCard 
               icon={<FaBolt />} 
-              label="Coal Burn Avoided" 
+              label="Clean Coal Avoided" 
               val={`${equiv.coal.toLocaleString()} Tons`} 
-              desc="Tons of coal offset by cleaner mix" 
-              color="#ef4444" 
+              desc="Tons of coal combustion prevented" 
+              color="#f59e0b" 
             />
 
             <EquivCard 
@@ -855,7 +965,7 @@ export default function Forecasting() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30 }} className="compliance-progress-grid">
               
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <ProgressBar label="ESG Disclosure Readiness" val={78} color="#10b981" />
+                <ProgressBar label="ESG Disclosure Readiness" val={esgScore} color="#10b981" />
                 <ProgressBar label="Regulatory Compliance Index" val={targetProj.compliance} color="#0f766e" />
                 <ProgressBar label="Grid Dependency Offsets" val={sliderRenewable} color="#3b82f6" />
               </div>
@@ -879,12 +989,12 @@ export default function Forecasting() {
               <div style={{ position: "absolute", top: "24px", left: "10%", right: "10%", height: "2px", borderTop: "2px dashed #cbd5e1", zIndex: 1 }} className="roadmap-connector" />
               
               {[
-                { yr: "2026", task: "Current State Baseline", desc: `${baseline.carbonMT.toFixed(1)} MT Carbon output`, active: true },
-                { yr: "2027", task: "PPA Contracting Switch", desc: `Initiate ${sliderRenewable}% renewables target`, active: sliderRenewable >= 25 },
-                { yr: "2028", task: "Energy Efficiency Upgrades", desc: `Reach ${sliderEfficiency}% consumption offset`, active: sliderEfficiency >= 10 },
-                { yr: "2029", task: "Credit Monetization", desc: `${targetProj.credits.toLocaleString()} compiled offsets`, active: targetProj.credits >= 400 },
-                { yr: "2030", task: "Biomass boiler Conversion", desc: "Offset direct combustion fuels", active: sliderFuel <= -10 },
-                { yr: "2032", task: "Net Zero Readiness Status", desc: "Maintain regulatory compliant scores", active: sliderRenewable === 100 }
+                { yr: String(currentYear), task: "Current State Baseline", desc: `${baseline.carbonMT.toFixed(1)} MT Carbon output`, active: true },
+                { yr: String(currentYear + 1), task: "PPA Contracting Switch", desc: `Initiate ${sliderRenewable}% renewables target`, active: sliderRenewable >= 25 },
+                { yr: String(currentYear + 2), task: "Energy Efficiency Upgrades", desc: `Reach ${sliderEfficiency}% consumption offset`, active: sliderEfficiency >= 10 },
+                { yr: String(currentYear + 3), task: "Credit Monetization", desc: `${targetProj.credits.toLocaleString()} compiled offsets`, active: targetProj.credits >= 400 },
+                { yr: String(currentYear + 4), task: "Biomass boiler Conversion", desc: "Offset direct combustion fuels", active: sliderFuel <= -10 },
+                { yr: String(currentYear + 6), task: "Net Zero Readiness Status", desc: "Maintain regulatory compliant scores", active: sliderRenewable === 100 }
               ].map((n, idx) => (
                 <div 
                   key={idx}
@@ -1042,7 +1152,7 @@ function ProgressBar({ label, val, color }) {
   );
 }
 
-function ForecastingApexChart({ options }) {
+const ForecastingApexChart = memo(({ options }) => {
   const ref = useRef(null);
   const instance = useRef(null);
 
@@ -1064,4 +1174,4 @@ function ForecastingApexChart({ options }) {
   }, [options]);
 
   return <div ref={ref} style={{ width: "100%", height: 350 }} />;
-}
+});

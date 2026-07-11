@@ -1,0 +1,20 @@
+* [33me0b24f5[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;32mbackup-ui-changes[m[33m)[m Enhanced all pages UI and  landing page, dashboard and login redesign
+* [33m8e603af[m feat: added functions in incident room page
+[31m|[m * [33m717b739[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Update carbonController.js
+[31m|[m * [33mf49fef0[m Update carbonController.js
+[31m|[m * [33m7ee0b01[m Update analyticsController.js
+[31m|[m * [33m23e39b4[m Update analyticsController.js
+[31m|[m * [33m36f7a6d[m Update server.js
+[31m|[m * [33m9d73590[m Update package.json
+[31m|[m * [33mfe97294[m Update package-lock.json
+[31m|[m * [33m7517a44[m Update .env
+[31m|[m * [33mc07d2a6[m Update plantentry.js
+[31m|[m * [33m7d37344[m Update carbonController.js
+[31m|[m * [33m30cda69[m Update analyticsController.js
+[31m|[m * [33mcf096fe[m Update Reports.jsx
+[31m|[m * [33m1ee6ff7[m Update Settings.jsx
+[31m|[m * [33m7e65367[m Update Landing.jsx
+[31m|[m * [33m468ace9[m Update InputForm.jsx
+[31m|[m * [33m1b78ff6[m Update Dashboard.jsx
+[31m|[m * [33m45d99f4[m Update Analytics.jsx
+[31m|[m * [33m9e6f28a[m Update .gitignore

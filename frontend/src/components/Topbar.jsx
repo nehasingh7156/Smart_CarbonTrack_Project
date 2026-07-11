@@ -11,55 +11,6 @@ export default function Topbar({ plant, page, setCollapsed }) {
     navigate("/");
   };
 
-  if (userRole === "admin") {
-    return (
-      <div
-        className="no-print"
-        style={{
-          background: "#c7e9ff",
-          color: "Teal",
-          padding: "14px 24px",
-          borderBottom: "1px solid #ddd",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          fontFamily: "'Inter', sans-serif"
-        }}
-      >
-        <div>
-          <h2 style={{ margin: 0, fontWeight: 700, fontSize: "20px" }}>{plant}</h2>
-          <p
-            style={{
-              margin: 0,
-              opacity: 0.7,
-              textTransform: "capitalize",
-              fontSize: "14px",
-              fontWeight: 600
-            }}
-          >
-            {page}
-          </p>
-        </div>
-
-        <button
-          onClick={handleLogout}
-          style={{
-            background: "#0f766e",
-            color: "white",
-            border: "none",
-            padding: "8px 16px",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "bold",
-            fontSize: "14px"
-          }}
-        >
-          Logout
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div
       className="no-print"
@@ -142,7 +93,7 @@ export default function Topbar({ plant, page, setCollapsed }) {
               letterSpacing: "0.5px"
             }}
           >
-            Manager Portal / {page}
+            {userRole === "admin" ? "Admin Portal" : "Manager Portal"} / {page}
           </p>
         </div>
       </div>
@@ -193,4 +144,3 @@ export default function Topbar({ plant, page, setCollapsed }) {
     </div>
   );
 }
-
