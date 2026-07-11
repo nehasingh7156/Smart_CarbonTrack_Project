@@ -5,6 +5,7 @@ import {
   FiCpu, FiCheckCircle, FiFileText, FiClock, FiActivity as FiNode, 
   FiCalendar, FiArrowRight 
 } from "react-icons/fi";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 /* ---------- chart types ---------- */
 const chartTypes = [

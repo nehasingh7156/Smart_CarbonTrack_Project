@@ -156,7 +156,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   const fetchData = () => {
-    fetch("${API_BASE}/api/carbon/all-entries")
+    fetch(  `${API_BASE}/api/carbon/all-entries`)
       .then(res => res.ok ? res.json() : [])
       .then(data => {
         setAllEntries(data);
