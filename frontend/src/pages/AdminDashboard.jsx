@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaIndustry, FaExclamationTriangle, FaCheckCircle, FaChartLine } from "react-icons/fa";
 import { FiActivity, FiLayers, FiAlertCircle, FiCpu, FiClock } from "react-icons/fi";
 import AdminReports from "../components/AdminReports";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 const PLANT_CAPS = {
   "Bhopal": 8000,
@@ -155,7 +156,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   const fetchData = () => {
-    fetch("http://localhost:5000/api/carbon/all-entries")
+    fetch("${API_BASE}/api/carbon/all-entries")
       .then(res => res.ok ? res.json() : [])
       .then(data => {
         setAllEntries(data);

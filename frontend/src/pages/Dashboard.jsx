@@ -349,7 +349,7 @@ export default function Dashboard(){
 
   useEffect(()=>{
     if (!plant) return;
-    fetch(`http://localhost:5000/api/carbon/dashboard/${plant}/${month+1}/${year}`)
+    fetch(`${API_BASE}/api/carbon/dashboard/${plant}/${month+1}/${year}`)
       .then(res=>res.json())
       .then(d=>setData(d))
       .catch(()=>setData(null));

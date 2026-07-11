@@ -10,6 +10,7 @@ import {
 } from "react-icons/fi";
 import { FaRegLightbulb } from "react-icons/fa";
 
+const API_BASE = import.meta.env.VITE_API_URL;
 const EMISSION_ALERT_THRESHOLD = 2500;
 
 export default function AnalyticsPage() {
@@ -35,7 +36,7 @@ export default function AnalyticsPage() {
     const m = monthIndex + 1; // 1-indexed for backend
 
     try {
-      const res = await fetch(`http://localhost:5000/api/carbon/dashboard/${currentPlant}/${m}/${year}`);
+      const res = await fetch(`${API_BASE}/api/carbon/dashboard/${currentPlant}/${m}/${year}`);
       const data = res.ok ? await res.json() : null;
       setDashboardData(data && !data.error ? data : null);
     } catch (error) {
@@ -54,7 +55,7 @@ export default function AnalyticsPage() {
       const promises = [];
       for (let m = 1; m <= 12; m++) {
         promises.push(
-          fetch(`http://localhost:5000/api/carbon/dashboard/${currentPlant}/${m}/${year}`)
+          fetch(`${API_BASE}/api/carbon/dashboard/${currentPlant}/${m}/${year}`)
             .then(res => res.json())
             .catch(() => null)
         );

@@ -7,6 +7,7 @@ import {
 import { FaFileExcel, FaFilePdf } from "react-icons/fa";
 import { triggerPrintFlow, generateExcel } from "../services/ReportExportService";
 
+const API_BASE = import.meta.env.VITE_API_URL;
 const MOCK_PLANTS = ["Bhopal", "Delhi", "Mumbai", "Pune", "Chennai", "Hyderabad"];
 const REPORT_TYPES = ["Summary", "Detailed Emissions", "Energy Consumption", "Fuel Consumption", "Carbon Intensity"];
 const PERIOD_TYPES = ["Month", "Quarter", "Year"];
@@ -49,7 +50,7 @@ export default function AdminReports() {
     const fetchData = async () => {
       try {
         const promises = monthsToFetch.map(m => 
-          fetch(`http://localhost:5000/api/carbon/dashboard/${selectedPlant}/${m}/${year}`)
+          fetch(`${API_BASE}/api/carbon/dashboard/${selectedPlant}/${m}/${year}`)
             .then(res => res.ok ? res.json() : null)
             .catch(() => null)
         );

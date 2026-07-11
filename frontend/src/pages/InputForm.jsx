@@ -7,6 +7,7 @@ import {
   FaIndustry
 } from "react-icons/fa";
 
+const API_BASE = import.meta.env.VITE_API_URL;
 const months = [
   "Jan","Feb","Mar","Apr",
   "May","Jun","Jul","Aug",
@@ -117,7 +118,7 @@ export default function InputForm() {
 
   try {
   const response = await fetch(
-    "http://localhost:5000/api/carbon/entry",
+    "${API_BASE}/api/carbon/entry",
     {
       method: "POST",
       headers: {

@@ -7,6 +7,7 @@ import {
 import { FaFileExcel, FaFilePdf } from "react-icons/fa";
 import { triggerPrintFlow, generateExcel } from "../services/ReportExportService";
 
+const API_BASE = import.meta.env.VITE_API_URL;
 const REPORT_TYPES = ["Summary", "Detailed Emissions", "Energy Consumption", "Fuel Consumption", "Carbon Intensity"];
 const PERIOD_TYPES = ["Month", "Quarter", "Year"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -38,7 +39,7 @@ export default function Reports() {
   useEffect(() => {
     const fetchPlants = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/carbon/plants");
+        const res = await fetch("${API_BASE}/api/carbon/plants");
         if (res.ok) {
           const list = await res.json();
           const savedPlant = localStorage.getItem("plant") || "";
@@ -83,13 +84,12 @@ export default function Reports() {
     } else {
       monthsToFetch = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
     }
-
-    try {
-      const promises = monthsToFetch.map(m => 
-        fetch(`http://localhost:5000/api/carbon/dashboard/${selectedPlant}/${m}/${year}`)
-          .then(res => res.ok ? res.json() : null)
-          .catch(() => null)
-      );
+try {
+  const promises = monthsToFetch.map((m) =>
+    fetch(`${API_BASE}/api/carbon/dashboard/${selectedPlant}/${m}/${year}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .catch(() => null)
+  );
 
       const results = await Promise.all(promises);
       const valids = results.filter(d => d && d.inputs && d.kpis);

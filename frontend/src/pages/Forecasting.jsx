@@ -7,6 +7,7 @@ import {
 } from "react-icons/fi";
 import { FaLeaf, FaCar, FaTree, FaBolt } from "react-icons/fa";
 
+const API_BASE = import.meta.env.VITE_API_URL;
 const FACTORS = {
   GRID_CO2: 0.82,
   LPG_CO2: 3.0,
@@ -80,7 +81,7 @@ export default function Forecasting() {
 
   // Fetch plant list
   useEffect(() => {
-    fetch("http://localhost:5000/api/carbon/plants")
+    fetch("${API_BASE}/api/carbon/plants")
       .then(res => res.ok ? res.json() : [])
       .then(list => {
         if (list.length > 0) {
@@ -101,7 +102,7 @@ export default function Forecasting() {
     if (!selectedPlant) return;
     setLoading(true);
     console.log(`[DEBUG] Frontend requesting forecasting data for plant: "${selectedPlant}"`);
-    fetch(`http://localhost:5000/api/carbon/plant-data/${encodeURIComponent(selectedPlant)}`)
+    fetch(`${API_BASE}/api/carbon/plant-data/${encodeURIComponent(selectedPlant)}`)
       .then(res => {
         console.log(`[DEBUG] API Response Status: ${res.status}`);
         return res.ok ? res.json() : [];

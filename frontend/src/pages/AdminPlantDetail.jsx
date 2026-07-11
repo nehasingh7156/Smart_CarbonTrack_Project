@@ -7,6 +7,8 @@ import {
 import { FaLeaf, FaChartLine } from "react-icons/fa";
 import ApexCharts from "apexcharts";
 
+const API_BASE = import.meta.env.VITE_API_URL;
+
 /* ---------- chart types ---------- */
 const chartTypes = ["bar", "line", "area", "pie", "donut"];
 const chartCardGradient = "#ffffff";
@@ -245,7 +247,7 @@ const YearlyTrendChart = memo(({ plant, year }) => {
         const promises = [];
         for (let m = 1; m <= 12; m++) {
           promises.push(
-            fetch(`http://localhost:5000/api/carbon/dashboard/${plant}/${m}/${year}`)
+            fetch(`${API_BASE}/api/carbon/dashboard/${plant}/${m}/${year}`)
               .then(res => res.json())
               .catch(() => null)
           );
@@ -423,7 +425,7 @@ export default function AdminPlantDetail() {
       setDataLoading(true);
     }, 0);
     
-    fetch(`http://localhost:5000/api/carbon/dashboard/${plant}/${month + 1}/${year}`)
+    fetch(`${API_BASE}/api/carbon/dashboard/${plant}/${month + 1}/${year}`)
       .then(res => res.json())
       .then(d => {
         if (isMounted) {
