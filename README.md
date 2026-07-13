@@ -103,6 +103,40 @@ I --> L[🌍 Sustainability Decisions]
 
 ---
 
+# ⚙️ Installation
+
+## 📥 Clone Repository
+
+```bash
+git clone https://github.com/nehasingh7156/Smart_CarbonTrack_Project.git
+
+cd Smart_CarbonTrack_Project
+```
+---
+
+## 💻 Frontend Setup
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+The frontend will start on:
+
+```text
+http://localhost:5173
+```
+
+---
+
+## 🖥️ Backend Setup
+
+```bash
+cd backend
+npm install
+npm start
+```
+
 # 🌟 Why SmartCarbonTrack?
 
 ✔️ Monitor Carbon Emissions in Real Time
