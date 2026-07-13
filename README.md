@@ -75,33 +75,31 @@ The platform uses this historical data to generate:
 
 ---
 
-# 🏗️ System Architecture
+## 🏗️ System Architecture
 
 ```mermaid
 flowchart LR
 
-A[🏭 Manufacturing Plants] --> B[📥 Operational Data Entry]
+A["🏭 Manufacturing Plants"] --> B["📥 Operational Data Entry"]
+B --> C["🌱 SmartCarbonTrack Platform"]
 
-B --> C[🌱 SmartCarbonTrack Platform]
+C --> D["📊 Dashboard"]
+C --> E["📈 Analytics"]
+C --> F["🤖 AI Prediction"]
+C --> G["📑 Reports"]
+C --> H["👤 Admin Portal"]
 
-C --> D[📊 Dashboard]
-C --> E[📈 Analytics]
-C --> F[🤖 AI Prediction]
-C --> G[📑 Reports]
-C --> H[👤 Admin Portal]
+F --> I["💡 AI Recommendations"]
 
-F --> I[💡 AI Recommendations]
-
-D --> J[📄 PDF Export]
+D --> J["📄 PDF Export"]
 G --> J
 
-D --> K[📊 Excel Export]
+D --> K["📊 Excel Export"]
 G --> K
 
-I --> L[🌍 Sustainability Decisions]
+I --> L["🌍 Sustainability Decisions"]
 ```
 
----
 
 # ⚙️ Installation
 
