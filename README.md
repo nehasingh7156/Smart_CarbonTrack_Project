@@ -171,3 +171,16 @@ npm start
 # 🌍 SmartCarbonTrack
 
 ### **Turning Industrial Data into Sustainable Decisions.**
+
+
+![React](https://img.shields.io/badge/Frontend-React.js-61DAFB?logo=react)
+
+![Node.js](https://img.shields.io/badge/Backend-Node.js-339933?logo=node.js)
+
+![AI Forecasting](https://img.shields.io/badge/AI-Forecasting-success)
+
+![ESG](https://img.shields.io/badge/ESG-Compliance-2E8B57)
+
+![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)
+
+![License](https://img.shields.io/badge/License-MIT-blue)
