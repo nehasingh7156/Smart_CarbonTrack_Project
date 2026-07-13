@@ -71,7 +71,7 @@ The platform uses this historical data to generate:
 
 | Frontend | Backend | Database | Charts | Reports |
 |----------|----------|----------|----------|----------|
-| React.js | Node.js | Firebase / MongoDB *(Update if required)* | ApexCharts | PDF & Excel Export |
+| React.js | Node.js | Firebase / MongoDB | ApexCharts | PDF & Excel Export |
 
 ---
 
