@@ -77,43 +77,8 @@ The platform uses this historical data to generate:
 
 ## 🏗️ System Architecture
 
-```mermaid
-flowchart TD
+<img width="2499" height="1329" alt="image" src="https://github.com/user-attachments/assets/1215443c-30c8-4cb7-a68e-ecd046e1a6c3" />
 
-A["🏭 Manufacturing Plants"]
-B["📥 Operational Data Entry"]
-C["🌱 SmartCarbonTrack Platform"]
-
-D["📊 Dashboard"]
-E["📈 Analytics"]
-F["🤖 AI Prediction"]
-G["📑 Reports"]
-H["👤 Admin Portal"]
-
-I["💡 AI Recommendations"]
-J["📄 PDF Reports"]
-K["📊 Excel Reports"]
-L["🌍 Sustainability Decisions"]
-
-A --> B
-B --> C
-
-C --> D
-C --> E
-C --> F
-C --> G
-C --> H
-
-F --> I
-
-D --> J
-G --> J
-
-D --> K
-G --> K
-
-I --> L
-```
 
 # ⚙️ Installation
 
